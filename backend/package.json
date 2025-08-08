@@ -1,0 +1,27 @@
+{
+  "name": "screenplay-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --enable-source-maps dist/server.js",
+    "build": "tsc",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0",
+    "nanoid": "^5.0.7",
+    "better-sqlite3": "^9.6.0",
+    "puppeteer": "^23.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/morgan": "^1.9.9",
+    "@types/better-sqlite3": "^7.6.11",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  }
+}
