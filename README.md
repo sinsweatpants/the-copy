@@ -1,6 +1,8 @@
 # Arabic Screenplay IDE
 
-End-to-end web app for Arabic screenplay writing/formatting.
+محرر السيناريوهات العربي - تطبيق شامل لكتابة وتنسيق السيناريوهات باللغة العربية.
+
+End-to-end web app for Arabic screenplay writing/formatting with advanced AI integration.
 
 ## Prereqs
 - Node 18+
