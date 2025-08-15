@@ -16,7 +16,10 @@ export default function Editor({ screenplayId, title }:
       Placeholder.configure({ placeholder: "ابدأ الكتابة هنا… (اللصق الذكي مفعل)" })
     ],
     editorProps: {
-      attributes: { class: "min-h-[70vh] bg-white shadow rounded-2xl p-6 screenplay-page outline-none" }
+      attributes: {
+        class: "min-h-[70vh] bg-white shadow rounded-2xl p-6 screenplay-page outline-none",
+        "data-testid": "rich-text-editor",
+      }
     },
     content: ""
   });

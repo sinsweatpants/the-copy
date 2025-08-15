@@ -45,7 +45,7 @@ export default function App() {
 
   return (
     <QueryClientProvider client={qc}>
-      <div className="container mx-auto py-6 grid grid-cols-[280px_1fr] gap-4">
+      <div role="main" className="container mx-auto py-6 grid grid-cols-[280px_1fr] gap-4">
         <EditorSidebar active={active} onNavigate={setActive} title="مشروعي الأول" pageCount={1} />
         <div className="space-y-4">
           <SprintTimer />
