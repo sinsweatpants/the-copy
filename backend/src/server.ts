@@ -6,6 +6,8 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { customAlphabet } from "nanoid";
 import puppeteer from "puppeteer";
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 
 const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 12);
 const app = express();
@@ -19,6 +21,23 @@ const schemaPath = join(process.cwd(), "src", "schema.sql");
 const schema = readFileSync(schemaPath, "utf8");
 db.exec(schema);
 
+// --- Auth Middleware
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+
 // --- Helpers
 function ok(res: any, data: unknown) {
   res.json({ ok: true, data });
@@ -27,8 +46,11 @@ function notFound(res: any) {
   res.status(404).json({ ok: false, error: "Not found" });
 }
 
-// --- API (mock auth: static userId)
-const USER_ID = "user_demo";
+// --- API
+// Apply auth middleware
+app.use('/api/screenplays', authenticateToken);
+app.use('/api/users/:userId', authenticateToken);
+
 
 // Screenplay metadata
 app.get("/api/screenplays/:id", (req, res) => {
