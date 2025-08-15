@@ -8,12 +8,26 @@ import { customAlphabet } from "nanoid";
 import puppeteer from "puppeteer";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
+
+import { errorHandler } from "./middleware/errorHandler.js";
+import { validateRequest, registerUserSchema, loginUserSchema } from "./middleware/validation.js";
 
 const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 12);
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+app.use('/api', limiter);
 
 const dbPath = join(process.cwd(), "data.sqlite");
 const db = new Database(dbPath);
@@ -46,7 +60,92 @@ function notFound(res: any) {
   res.status(404).json({ ok: false, error: "Not found" });
 }
 
+// --- Health Check ---
+app.get('/health', (req, res) => {
+  try {
+    // Check database connection
+    db.prepare('SELECT 1').get();
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV,
+      database: 'connected',
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      database: 'disconnected',
+      error: (error as Error).message,
+    });
+  }
+});
+
 // --- API
+
+// --- Auth Endpoints ---
+
+// Register new user
+app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, res, next) => {
+  try {
+    const { email, username, password } = req.body;
+
+    // Check if user exists
+    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?')
+      .get(email, username);
+
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = nanoid();
+    const now = new Date().toISOString();
+
+    // Insert user
+    db.prepare(`
+      INSERT INTO users (id, email, username, password_hash, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, email, username, passwordHash, now, now);
+
+    // Generate JWT
+    const token = jwt.sign({ userId, email, username }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+
+    res.json({ token, user: { id: userId, email, username } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Login
+app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+
+    res.json({ token, user: { id: user.id, email: user.email, username: user.username } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 // Apply auth middleware
 app.use('/api/screenplays', authenticateToken);
 app.use('/api/users/:userId', authenticateToken);
@@ -210,7 +309,12 @@ app.post("/api/export/pdf", async (req, res) => {
   }
 });
 
+// Global error handler - MUST be last
+app.use(errorHandler);
+
 const PORT = process.env.PORT ?? 4000;
 app.listen(PORT, () => {
   console.log("API on http://localhost:" + PORT);
 });
+
+export default app;
