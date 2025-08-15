@@ -1,7 +1,16 @@
 export type ID = string;
 
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Screenplay {
-  id: ID;
+  id: string;
+  userId: string;  // إضافة العلاقة مع المستخدم
   title: string;
   createdAt: string;
   updatedAt: string;
