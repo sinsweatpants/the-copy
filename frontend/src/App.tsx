@@ -17,8 +17,10 @@ export default function App() {
   const [dlgOpen, setDlgOpen] = useState(false);
   const [dlgChar, setDlgChar] = useState<{id: string|null; name: string}>({ id: null, name: "" });
   
-  // Use seeded screenplay ID - in production this would come from routing
-  const screenplayId = "put-your-seeded-id-here"; // Replace with actual seeded ID
+  // Determine screenplay ID from the current URL or routing state
+  const [screenplayId] = useState(() =>
+    new URLSearchParams(window.location.search).get("screenplayId") ?? ""
+  );
 
   // Minimal "line accessors" for panels (using DOM snapshot)
   const editorRef = useRef<HTMLDivElement>(null);

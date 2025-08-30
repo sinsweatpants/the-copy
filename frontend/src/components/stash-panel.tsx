@@ -2,19 +2,26 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getStash, addStash, deleteStash } from "@/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function StashPanel() {
   const qc = useQueryClient();
-  const { data: items=[] } = useQuery({ queryKey: ["stash"], queryFn: getStash });
+  const { user } = useAuth();
+  const uid = user?.id ?? "";
+  const { data: items = [] } = useQuery({
+    queryKey: ["stash", uid],
+    queryFn: () => getStash(uid),
+    enabled: !!uid,
+  });
 
   const add = useMutation({
-    mutationFn: (text: string)=>addStash(text),
-    onSuccess: ()=>qc.invalidateQueries({ queryKey: ["stash"] })
+    mutationFn: (text: string) => addStash(uid, text),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stash", uid] })
   });
 
   const del = useMutation({
-    mutationFn: (id: string)=>deleteStash(id),
-    onSuccess: ()=>qc.invalidateQueries({ queryKey: ["stash"] })
+    mutationFn: (id: string) => deleteStash(uid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stash", uid] })
   });
 
   return (

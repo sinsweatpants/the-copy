@@ -3,15 +3,28 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getActiveSprint, startSprint, updateSprint } from "@/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SprintTimer() {
   const qc = useQueryClient();
-  const { data: active } = useQuery({ queryKey: ["sprint"], queryFn: getActiveSprint });
+  const { user } = useAuth();
+  const uid = user?.id ?? "";
+  const { data: active } = useQuery({
+    queryKey: ["sprint", uid],
+    queryFn: () => getActiveSprint(uid),
+    enabled: !!uid,
+  });
   const [seconds, setSeconds] = useState(25*60);
   const timerRef = useRef<number|undefined>(undefined);
 
-  const startMut = useMutation({ mutationFn: startSprint, onSuccess: ()=>qc.invalidateQueries({queryKey:["sprint"]}) });
-  const endMut = useMutation({ mutationFn: (payload: any)=>updateSprint(active?.id, payload), onSuccess: ()=>qc.invalidateQueries({queryKey:["sprint"]}) });
+  const startMut = useMutation({
+    mutationFn: () => startSprint(uid),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sprint", uid] }),
+  });
+  const endMut = useMutation({
+    mutationFn: (payload: any) => updateSprint(uid, active?.id, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sprint", uid] }),
+  });
 
   useEffect(()=>{
     if (active?.isActive) {
