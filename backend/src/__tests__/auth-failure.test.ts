@@ -6,9 +6,9 @@ import createServer from "../server";
 
 jest.mock("nanoid", () => ({ customAlphabet: () => () => "id" }));
 jest.mock("jsonwebtoken", () => ({ sign: jest.fn(() => "tok"), verify: jest.fn((t: any, s: any, cb: any) => cb(null, {})) }));
-jest.mock("bcrypt", () => ({ hash: jest.fn(async () => "h"), compare: jest.fn(async () => true) }));
+jest.mock("bcrypt", () => ({ hash: jest.fn(async () => "h"), compare: jest.fn(async () => false) }));
 
-describe("Authentication Endpoints", () => {
+describe("Authentication failures", () => {
   let db: Database.Database;
   let app: ReturnType<typeof createServer>;
 
@@ -24,17 +24,18 @@ describe("Authentication Endpoints", () => {
     db.close();
   });
 
-  test("should fail to register a user that already exists", async () => {
-    const userData = {
-      email: "duplicate@example.com",
-      username: "duplicateuser",
-      password: "password123",
-    };
+  test("login with incorrect password should fail", async () => {
+    const user = { email: "user@example.com", username: "user", password: "password123" };
+    await request(app).post("/api/auth/register").send(user);
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: user.email, password: "wrongpass" });
+    expect(res.status).toBe(401);
+  });
 
-    await request(app).post("/api/auth/register").send(userData);
-    const response = await request(app).post("/api/auth/register").send(userData);
-
-    expect(response.status).toBe(409);
-    expect(response.body.error).toBe("User already exists");
+  test("request without token should be unauthorized", async () => {
+    const res = await request(app).get("/api/screenplays/xyz");
+    expect(res.status).toBe(401);
   });
 });
+
