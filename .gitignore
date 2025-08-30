@@ -1,5 +1,29 @@
+# Dependencies
+node_modules/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Database
+*.sqlite
+*.db
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,10 +31,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# PM2
+.pm2/
+ecosystem.config.js
+ecosystem.config.cjs
 
 # Editor directories and files
 .vscode/*
@@ -22,4 +46,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.Trashes
+*.tmp
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Temporary folders
+tmp/
+temp/
+
+# Screenshots and test files
+*.png
+*.jpg
+*.jpeg
+*.gif
