@@ -1,5 +1,4 @@
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:4000/api";
-const USER_ID = "user_demo";
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -32,16 +31,16 @@ export const getDialogues = (cid: string) => api(`/characters/${cid}/dialogues`)
 export const updateDialogue = (id: string, text: string) =>
   api(`/dialogues/${id}`, { method: "PUT", body: JSON.stringify({ text }) });
 
-export const getActiveSprint = () => api(`/users/${USER_ID}/sprints/active`);
-export const startSprint = () => api(`/users/${USER_ID}/sprints`, { method: "POST" });
-export const updateSprint = (sid: string, payload: any) =>
-  api(`/users/${USER_ID}/sprints/${sid}`, { method: "PUT", body: JSON.stringify(payload) });
+export const getActiveSprint = (uid: string) => api(`/users/${uid}/sprints/active`);
+export const startSprint = (uid: string) => api(`/users/${uid}/sprints`, { method: "POST" });
+export const updateSprint = (uid: string, sid: string, payload: any) =>
+  api(`/users/${uid}/sprints/${sid}`, { method: "PUT", body: JSON.stringify(payload) });
 
-export const getStash = () => api(`/users/${USER_ID}/stash`);
-export const addStash = (text: string, type = "snippet") =>
-  api(`/users/${USER_ID}/stash`, { method: "POST", body: JSON.stringify({ text, type }) });
-export const deleteStash = (id: string) =>
-  api(`/users/${USER_ID}/stash/${id}`, { method: "DELETE" });
+export const getStash = (uid: string) => api(`/users/${uid}/stash`);
+export const addStash = (uid: string, text: string, type = "snippet") =>
+  api(`/users/${uid}/stash`, { method: "POST", body: JSON.stringify({ text, type }) });
+export const deleteStash = (uid: string, id: string) =>
+  api(`/users/${uid}/stash/${id}`, { method: "DELETE" });
 
 // Export PDF (raw fetch)
 export async function exportPdf(html: string, title = "screenplay") {
