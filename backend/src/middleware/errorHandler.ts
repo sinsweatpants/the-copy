@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import logger from '../logger';
 
 export class AppError extends Error {
   statusCode: number;
@@ -20,7 +21,7 @@ export const errorHandler = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   next: NextFunction
 ) => {
-  console.error('ERROR 💥', err);
+  logger.error({ err }, 'ERROR 💥');
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
