@@ -21,6 +21,9 @@ export function createServer(db: Database.Database) {
   app.use(express.json({ limit: "2mb" }));
   app.use(morgan("dev"));
 
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
+
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -28,7 +31,7 @@ export function createServer(db: Database.Database) {
     legacyHeaders: false,
     message: "Too many requests from this IP, please try again after 15 minutes",
   });
-  app.use("/api", limiter as any);
+  app.use("/api", limiter);
 
   const authenticateToken = (req: any, res: any, next: any) => {
     const authHeader = req.headers["authorization"];
@@ -36,7 +39,7 @@ export function createServer(db: Database.Database) {
     if (!token) {
       return res.sendStatus(401);
     }
-    jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
       if (err) return res.sendStatus(403);
       req.user = user;
       next();
@@ -87,7 +90,7 @@ export function createServer(db: Database.Database) {
       db.prepare(
         "INSERT INTO users (id, email, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
       ).run(userId, email, username, passwordHash, now, now);
-      const token = jwt.sign({ userId, email, username }, process.env.JWT_SECRET!, {
+      const token = jwt.sign({ userId, email, username }, JWT_SECRET, {
         expiresIn: "7d",
       });
       res.json({ token, user: { id: userId, email, username } });
@@ -109,7 +112,7 @@ export function createServer(db: Database.Database) {
       }
       const token = jwt.sign(
         { userId: user.id, email: user.email, username: user.username },
-        process.env.JWT_SECRET!,
+        JWT_SECRET,
         { expiresIn: "7d" }
       );
       res.json({ token, user: { id: user.id, email: user.email, username: user.username } });
@@ -246,7 +249,7 @@ export function createServer(db: Database.Database) {
   app.post("/api/export/pdf", async (req, res) => {
     try {
       const { html, title = "screenplay" } = req.body ?? {};
-      const browser = await puppeteer.launch({ headless: "new" as any });
+      const browser = await puppeteer.launch();
       const page = await browser.newPage();
       const style = `
         <style>

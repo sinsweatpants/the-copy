@@ -27,6 +27,7 @@ describe("PDF export", () => {
     db = new Database(":memory:");
     const schema = readFileSync(join(process.cwd(), "src", "schema.sql"), "utf8");
     db.exec(schema);
+    process.env.JWT_SECRET = "test-secret";
     app = createServer(db);
   });
 
