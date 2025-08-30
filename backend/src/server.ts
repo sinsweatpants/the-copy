@@ -35,6 +35,9 @@ const schemaPath = join(process.cwd(), "src", "schema.sql");
 const schema = readFileSync(schemaPath, "utf8");
 db.exec(schema);
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
+
 // --- Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers['authorization'];
@@ -44,7 +47,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     req.user = user;
     next();
@@ -112,7 +115,7 @@ app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, 
     `).run(userId, email, username, passwordHash, now, now);
 
     // Generate JWT
-    const token = jwt.sign({ userId, email, username }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    const token = jwt.sign({ userId, email, username }, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token, user: { id: userId, email, username } });
   } catch (error) {
@@ -137,7 +140,7 @@ app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, n
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token, user: { id: user.id, email: user.email, username: user.username } });
   } catch (error) {
