@@ -4,11 +4,11 @@
 type LineItem = { text: string; format: string; index: number };
 
 export async function auditWithGemini(chunk: LineItem[]): Promise<Array<{ lineIndex: number; correctFormat: string }>> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string;
-  if (!apiKey) throw new Error("VITE_GEMINI_API_KEY missing");
+  const token = localStorage.getItem('token');
+  if (!token) throw new Error("Authentication token not found");
 
-  const model = "models/gemini-1.5-pro";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+  const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:4000/api";
+  const endpoint = `${apiBase}/gemini-proxy`;
 
   const system = [
     "You are an expert Arabic screenplay format validator.",
@@ -26,16 +26,21 @@ export async function auditWithGemini(chunk: LineItem[]): Promise<Array<{ lineIn
     lines: chunk.map(({ text, format, index }) => ({ index, text, format }))
   });
 
+  const body = {
+    contents: [
+      { role: "user", parts: [{ text: system }] },
+      { role: "user", parts: [{ text: userPayload }] }
+    ],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 512 }
+  };
+
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        { role: "user", parts: [{ text: system }] },
-        { role: "user", parts: [{ text: userPayload }] }
-      ],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 512 }
-    })
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify(body)
   });
 
   if (!res.ok) throw new Error("Gemini API error " + res.status);

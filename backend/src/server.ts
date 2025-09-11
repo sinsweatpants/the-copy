@@ -1,42 +1,123 @@
 import express from "express";
 import cors from "cors";
-import morgan from "morgan";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import Database from "better-sqlite3";
-import { customAlphabet } from "nanoid";
+import pinoHttp from "pino-http";
+import logger from "./logger.js";
+import pkg from 'pg';
+const { Pool } = pkg;
 import puppeteer from "puppeteer";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import { validateRequest, registerUserSchema, loginUserSchema } from "./middleware/validation.js";
 
-const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 12);
 const app = express();
-app.use(cors());
+if (process.env.NODE_ENV === 'production') {
+  app.use(cors({
+    origin: process.env.CORS_ORIGIN,
+  }));
+} else {
+  app.use(cors());
+}
 app.use(express.json({ limit: "2mb" }));
-app.use(morgan("dev"));
+app.use(pinoHttp({ logger }));
 
 // Rate limiting
-const limiter = rateLimit({
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many requests from this IP, please try again after 15 minutes',
 });
-app.use('/api', limiter);
+// @ts-ignore
+app.use('/api', apiLimiter);
 
-const dbPath = join(process.cwd(), "data.sqlite");
-const db = new Database(dbPath);
-const schemaPath = join(process.cwd(), "src", "schema.sql");
-const schema = readFileSync(schemaPath, "utf8");
-db.exec(schema);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs on auth routes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many authentication requests from this IP, please try again after 15 minutes',
+});
+// @ts-ignore
+app.use('/api/auth', authLimiter);
+
+import { createClient } from 'redis';
+
+// PG Pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Redis Client
+const redisClient = createClient({
+  url: process.env.REDIS_URL,
+});
+
+redisClient.on('error', (err) => logger.error('Redis Client Error', err));
+
+app.post('/api/auth/refresh', async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.sendStatus(401);
+    }
+
+    const result = await pool.query('SELECT * FROM refresh_tokens WHERE token = $1', [refreshToken]);
+    const storedToken = result.rows[0];
+
+    if (!storedToken) {
+      return res.sendStatus(403);
+    }
+
+    if (new Date(storedToken.expires_at) < new Date()) {
+      await pool.query('DELETE FROM refresh_tokens WHERE id = $1', [storedToken.id]);
+      return res.status(403).json({ error: 'Refresh token expired' });
+    }
+
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [storedToken.user_id]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.sendStatus(403);
+    }
+
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
+    const accessToken = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
+
+    res.json({ accessToken });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/logout', async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
+    }
+    res.sendStatus(204);
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
+
+// TODO: Move to .env
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET ?? 'a-very-secret-refresh-key';
+const ACCESS_TOKEN_EXPIRES_IN = '15m';
+const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
 
 // --- Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
@@ -64,10 +145,10 @@ function notFound(res: any) {
 }
 
 // --- Health Check ---
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   try {
     // Check database connection
-    db.prepare('SELECT 1').get();
+    await pool.query('SELECT 1');
     res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -96,28 +177,26 @@ app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, 
     const { email, username, password } = req.body;
 
     // Check if user exists
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?')
-      .get(email, username);
-
-    if (existingUser) {
+    const existingUserResult = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
+    if (existingUserResult.rows.length > 0) {
       return res.status(409).json({ error: 'User already exists' });
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userId = nanoid();
-    const now = new Date().toISOString();
+    const passwordHash = await bcrypt.hash(password, 12);
 
     // Insert user
-    db.prepare(`
-      INSERT INTO users (id, email, username, password_hash, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, email, username, passwordHash, now, now);
+    const newUserResult = await pool.query(
+      'INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username',
+      [email, username, passwordHash]
+    );
+    const user = newUserResult.rows[0];
 
     // Generate JWT
-    const token = jwt.sign({ userId, email, username }, JWT_SECRET, { expiresIn: '7d' });
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
+    const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({ token, user: { id: userId, email, username } });
+    res.json({ token, user });
   } catch (error) {
     next(error);
   }
@@ -128,7 +207,8 @@ app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, n
   try {
     const { email, password } = req.body;
 
-    const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -140,9 +220,50 @@ app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, n
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    // Generate tokens
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
+    const accessToken = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
+    const refreshToken = crypto.randomBytes(64).toString('hex');
+    const refreshTokenExpiry = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_MS);
 
-    res.json({ token, user: { id: user.id, email: user.email, username: user.username } });
+    // Store refresh token
+    await pool.query(
+      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, refreshToken, refreshTokenExpiry]
+    );
+
+    res.json({
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, username: user.username }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+// --- Gemini Proxy ---
+app.post('/api/gemini-proxy', authenticateToken, async (req, res, next) => {
+  try {
+    const model = "models/gemini-1.5-pro";
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+    const proxyRes = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+
+    if (!proxyRes.ok) {
+      const errorText = await proxyRes.text();
+      logger.error({ error: "Gemini API error", details: errorText });
+      return res.status(proxyRes.status).json({ error: "Gemini API error", details: errorText });
+    }
+
+    const data = await proxyRes.json();
+    res.json(data);
+
   } catch (error) {
     next(error);
   }
@@ -155,108 +276,172 @@ app.use('/api/users/:userId', authenticateToken);
 
 
 // Screenplay metadata
-app.get("/api/screenplays/:id", (req, res) => {
-  const row = db.prepare("SELECT * FROM screenplays WHERE id=?").get(req.params.id);
-  if (!row) return notFound(res);
-  ok(res, row);
+app.get("/api/screenplays/:id", async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT * FROM screenplays WHERE id=$1", [req.params.id]);
+    const row = result.rows[0];
+    if (!row) return notFound(res);
+    ok(res, row);
+  } catch(e) { next(e); }
 });
 
 // Screenplay content
-app.get("/api/screenplays/:id/content", (req, res) => {
-  const row = db.prepare("SELECT html, updatedAt FROM screenplay_content WHERE screenplayId=?")
-    .get(req.params.id);
-  ok(res, row ?? { html: "", updatedAt: null });
+app.get("/api/screenplays/:id/content", async (req, res, next) => {
+  const cacheKey = `screenplay:content:${req.params.id}`;
+  try {
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      return ok(res, JSON.parse(cachedData));
+    }
+
+    const result = await pool.query("SELECT html, updated_at FROM screenplay_content WHERE screenplay_id=$1", [req.params.id]);
+    const data = result.rows[0] ?? { html: "", updatedAt: null };
+
+    // Cache for 1 hour
+    await redisClient.set(cacheKey, JSON.stringify(data), { EX: 3600 });
+
+    ok(res, data);
+  } catch(e) { next(e); }
 });
 
-app.put("/api/screenplays/:id/content", (req, res) => {
-  const { html } = req.body ?? { html: "" };
-  const now = new Date().toISOString();
-  const stmt = db.prepare(`
-    INSERT INTO screenplay_content (screenplayId, html, updatedAt)
-    VALUES (?, ?, ?)
-    ON CONFLICT(screenplayId) DO UPDATE SET html=excluded.html, updatedAt=excluded.updatedAt
-  `);
-  stmt.run(req.params.id, html ?? "", now);
-  ok(res, { updatedAt: now });
+app.put("/api/screenplays/:id/content", async (req, res, next) => {
+  const cacheKey = `screenplay:content:${req.params.id}`;
+  try {
+    const { html } = req.body ?? { html: "" };
+    const now = new Date();
+    const result = await pool.query(`
+      INSERT INTO screenplay_content (screenplay_id, html, updated_at)
+      VALUES ($1, $2, $3)
+      ON CONFLICT(screenplay_id) DO UPDATE SET html=excluded.html, updated_at=excluded.updated_at
+      RETURNING updated_at
+    `, [req.params.id, html ?? "", now]);
+
+    // Invalidate cache
+    await redisClient.del(cacheKey);
+
+    ok(res, { updatedAt: result.rows[0].updated_at });
+  } catch(e) { next(e); }
 });
 
 // Characters
-app.get("/api/screenplays/:id/characters", (req, res) => {
-  const rows = db.prepare("SELECT * FROM characters WHERE screenplayId=?").all(req.params.id);
-  ok(res, rows);
+app.get("/api/screenplays/:id/characters", async (req, res, next) => {
+  const cacheKey = `screenplay:characters:${req.params.id}`;
+  try {
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      return ok(res, JSON.parse(cachedData));
+    }
+
+    const result = await pool.query("SELECT * FROM characters WHERE screenplay_id=$1", [req.params.id]);
+    const data = result.rows;
+
+    // Cache for 1 hour
+    await redisClient.set(cacheKey, JSON.stringify(data), { EX: 3600 });
+
+    ok(res, data);
+  } catch(e) { next(e); }
 });
 
-app.post("/api/screenplays/:id/characters", (req, res) => {
-  const id = nanoid();
-  const { name, role } = req.body ?? {};
-  db.prepare(`INSERT INTO characters (id, screenplayId, name, role) VALUES (?,?,?,?)`)
-    .run(id, req.params.id, name ?? "بدون اسم", role ?? "");
-  ok(res, { id, name, role });
+app.post("/api/screenplays/:id/characters", async (req, res, next) => {
+  const cacheKey = `screenplay:characters:${req.params.id}`;
+  try {
+    const { name, role } = req.body ?? {};
+    const result = await pool.query(
+      `INSERT INTO characters (screenplay_id, name, role) VALUES ($1, $2, $3) RETURNING id, name, role`,
+      [req.params.id, name ?? "بدون اسم", role ?? ""]
+    );
+
+    // Invalidate cache
+    await redisClient.del(cacheKey);
+
+    ok(res, result.rows[0]);
+  } catch(e) { next(e); }
 });
 
 // Dialogues
-app.get("/api/characters/:id/dialogues", (req, res) => {
-  const rows = db.prepare("SELECT * FROM dialogues WHERE characterId=?").all(req.params.id);
-  ok(res, rows);
+app.get("/api/characters/:id/dialogues", async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT * FROM dialogues WHERE character_id=$1", [req.params.id]);
+    ok(res, result.rows);
+  } catch(e) { next(e); }
 });
 
-app.put("/api/dialogues/:dialogueId", (req, res) => {
-  const { text } = req.body ?? {};
-  db.prepare("UPDATE dialogues SET text=? WHERE id=?").run(text ?? "", req.params.dialogueId);
-  ok(res, { id: req.params.dialogueId, text });
+app.put("/api/dialogues/:dialogueId", async (req, res, next) => {
+  try {
+    const { text } = req.body ?? {};
+    await pool.query("UPDATE dialogues SET text=$1 WHERE id=$2", [text ?? "", req.params.dialogueId]);
+    ok(res, { id: req.params.dialogueId, text });
+  } catch(e) { next(e); }
 });
 
 // Sprints
-app.get("/api/users/:userId/sprints/active", (req, res) => {
-  const row = db.prepare("SELECT * FROM sprints WHERE userId=? AND isActive=1 ORDER BY startedAt DESC LIMIT 1").get(req.params.userId);
-  ok(res, row ?? null);
+app.get("/api/users/:userId/sprints/active", async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT * FROM sprints WHERE user_id=$1 AND is_active=true ORDER BY started_at DESC LIMIT 1", [req.params.userId]);
+    ok(res, result.rows[0] ?? null);
+  } catch(e) { next(e); }
 });
 
-app.post("/api/users/:userId/sprints", (req, res) => {
-  const id = nanoid();
-  const startedAt = new Date().toISOString();
-  db.prepare(`INSERT INTO sprints (id, userId, isActive, startedAt) VALUES (?,?,1,?)`)
-    .run(id, req.params.userId, startedAt);
-  ok(res, { id, startedAt, isActive: 1 });
+app.post("/api/users/:userId/sprints", async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `INSERT INTO sprints (user_id, is_active) VALUES ($1, true) RETURNING id, started_at, is_active`,
+      [req.params.userId]
+    );
+    ok(res, result.rows[0]);
+  } catch(e) { next(e); }
 });
 
-app.put("/api/users/:userId/sprints/:sprintId", (req, res) => {
-  const { action, durationSec } = req.body ?? {};
-  if (action === "end") {
-    db.prepare(`UPDATE sprints SET isActive=0, endedAt=?, durationSec=? WHERE id=? AND userId=?`)
-      .run(new Date().toISOString(), durationSec ?? null, req.params.sprintId, req.params.userId);
-  } else if (action === "pause") {
-    db.prepare(`UPDATE sprints SET isActive=0 WHERE id=? AND userId=?`)
-      .run(req.params.sprintId, req.params.userId);
-  }
-  ok(res, { id: req.params.sprintId, action });
+app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
+  try {
+    const { action, durationSec } = req.body ?? {};
+    if (action === "end") {
+      await pool.query(
+        `UPDATE sprints SET is_active=false, ended_at=current_timestamp, duration_sec=$1 WHERE id=$2 AND user_id=$3`,
+        [durationSec ?? null, req.params.sprintId, req.params.userId]
+      );
+    } else if (action === "pause") {
+      await pool.query(
+        `UPDATE sprints SET is_active=false WHERE id=$1 AND user_id=$2`,
+        [req.params.sprintId, req.params.userId]
+      );
+    }
+    ok(res, { id: req.params.sprintId, action });
+  } catch(e) { next(e); }
 });
 
 // Stash
-app.get("/api/users/:userId/stash", (req, res) => {
-  const rows = db.prepare("SELECT * FROM stash WHERE userId=? ORDER BY createdAt DESC").all(req.params.userId);
-  ok(res, rows);
+app.get("/api/users/:userId/stash", async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT * FROM stash WHERE user_id=$1 ORDER BY created_at DESC", [req.params.userId]);
+    ok(res, result.rows);
+  } catch(e) { next(e); }
 });
 
-app.post("/api/users/:userId/stash", (req, res) => {
-  const id = nanoid();
-  const { text, type } = req.body ?? {};
-  const wordCount = (text ?? "").trim().split(/\s+/).filter(Boolean).length;
-  db.prepare(`INSERT INTO stash (id, userId, text, type, wordCount, createdAt) VALUES (?,?,?,?,?,?)`)
-    .run(id, req.params.userId, text ?? "", type ?? "snippet", wordCount, new Date().toISOString());
-  ok(res, { id });
+app.post("/api/users/:userId/stash", async (req, res, next) => {
+  try {
+    const { text, type } = req.body ?? {};
+    const wordCount = (text ?? "").trim().split(/\s+/).filter(Boolean).length;
+    const result = await pool.query(
+      `INSERT INTO stash (user_id, text, type, word_count) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [req.params.userId, text ?? "", type ?? "snippet", wordCount]
+    );
+    ok(res, { id: result.rows[0].id });
+  } catch(e) { next(e); }
 });
 
-app.delete("/api/users/:userId/stash/:itemId", (req, res) => {
-  db.prepare("DELETE FROM stash WHERE id=? AND userId=?").run(req.params.itemId, req.params.userId);
-  ok(res, true);
+app.delete("/api/users/:userId/stash/:itemId", async (req, res, next) => {
+  try {
+    await pool.query("DELETE FROM stash WHERE id=$1 AND user_id=$2", [req.params.itemId, req.params.userId]);
+    ok(res, true);
+  } catch(e) { next(e); }
 });
 
 // Export PDF
 app.post("/api/export/pdf", async (req, res) => {
   try {
     const { html, title = "screenplay" } = req.body ?? {};
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
     const style = `
@@ -307,7 +492,7 @@ app.post("/api/export/pdf", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${title}.pdf"`);
     res.send(Buffer.from(pdf));
   } catch (e: any) {
-    console.error(e);
+    logger.error(e, "PDF export failed");
     res.status(500).json({ ok: false, error: e?.message ?? "PDF error" });
   }
 });
@@ -316,8 +501,23 @@ app.post("/api/export/pdf", async (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT ?? 4000;
-app.listen(PORT, () => {
-  console.log("API on http://localhost:" + PORT);
-});
+
+async function startServer() {
+  try {
+    await redisClient.connect();
+    logger.info('Connected to Redis');
+    app.listen(PORT, () => {
+      logger.info(`API on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    logger.error(err, 'Failed to start server');
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV !== 'test') {
+    startServer();
+}
+
 
 export default app;
