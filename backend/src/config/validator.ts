@@ -7,7 +7,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(32),
   GEMINI_API_KEY: z.string().min(1),
   REDIS_URL: z.string().url(),
-  CORS_ORIGIN: z.string().optional(),
+  FRONTEND_ORIGIN: z.string().url(),
+  RATE_LIMIT_PER_MIN: z.string().optional(),
+  HEAVY_LIMIT: z.string().optional(),
 });
 
 export default function validateEnv() {

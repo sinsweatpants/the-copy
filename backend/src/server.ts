@@ -29,22 +29,35 @@ app.use(inputSanitizer);
 app.use(httpLogger);
 
 // Rate limiting
+const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '20', 10);
+const HEAVY_LIMIT = parseInt(process.env.HEAVY_LIMIT || '5', 10);
+
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 60 * 1000, // 1 minute
+  max: RATE_LIMIT_PER_MIN,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many requests from this IP, please try again after 15 minutes',
+  message: 'Too many requests from this IP, please try again later',
 });
 // @ts-ignore
 app.use('/api', apiLimiter);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs on auth routes
+const heavyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: HEAVY_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many authentication requests from this IP, please try again after 15 minutes',
+  message: 'Too many heavy requests, please slow down',
+});
+// @ts-ignore
+app.use('/api/llm', heavyLimiter);
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Math.max(1, Math.floor(RATE_LIMIT_PER_MIN / 10)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many authentication requests from this IP, please try again later',
 });
 // @ts-ignore
 app.use('/api/auth', authLimiter);
@@ -288,7 +301,7 @@ geminiBreaker.on('halfOpen', () => logger.info('Gemini circuit breaker is half-o
 geminiBreaker.on('fallback', () => logger.warn('Gemini API fallback triggered'));
 
 
-app.post('/api/gemini-proxy', authenticateToken, async (req, res, next) => {
+app.post('/api/llm/generate', authenticateToken, async (req, res, next) => {
     try {
         const data = await geminiBreaker.fire(req.body);
         res.json(data);
