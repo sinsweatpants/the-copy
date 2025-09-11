@@ -1,36 +1,25 @@
-# Use a specific Node.js version for reproducibility
-FROM node:18.18-alpine
-
-# Set the working directory in the container
+# Builder stage
+FROM node:18-alpine AS build
 WORKDIR /app
-
-# Copy root package files first to leverage Docker cache
 COPY package*.json ./
-
-# Install root dependencies
-# Using `npm install` instead of `ci` if only package.json is present
-RUN npm install --only=production
-
-# Copy backend package files and install dependencies
-COPY backend/package*.json ./backend/
-RUN cd backend && npm ci --only=production
-
-# Copy frontend package files and install dependencies
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci --only=production
-
-# Copy the rest of the source code
+RUN npm ci --omit=dev
+COPY backend/package*.json backend/
+RUN cd backend && npm ci --omit=dev
+COPY frontend/package*.json frontend/
+RUN cd frontend && npm ci --omit=dev
 COPY . .
-
-# Build the frontend application
 RUN cd frontend && npm run build
-
-# Build the backend application
 RUN cd backend && npm run build
 
-# Expose the port the backend runs on
+# Production stage
+FROM node:18-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/backend/dist backend/dist
+COPY --from=build /app/frontend/dist frontend/dist
+COPY backend/package*.json backend/
+RUN cd backend && npm ci --omit=dev
+RUN addgroup -S app && adduser -S app -G app
+USER app
 EXPOSE 4000
-
-# Command to run the application in production
-# This assumes a "start:prod" script exists in the root package.json
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "backend/dist/server.js"]
