@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "lint": "echo 'frontend lint'"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.51.21",

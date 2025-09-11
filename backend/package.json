@@ -8,6 +8,7 @@
     "build": "tsc",
     "worker": "tsx watch -r dotenv/config src/workers/pdf-worker.ts",
     "test": "jest",
+    "lint": "echo 'backend lint'",
     "migrate:create": "node-pg-migrate -m src/migrations create",
     "migrate:up": "node-pg-migrate -r dotenv/config up",
     "prod:start": "pm2 start dist/server.js --name ara-screenplay-api -i max",
