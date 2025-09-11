@@ -8,7 +8,6 @@ import { httpLogger, default as logger } from './logger/enhanced-logger.js';
 import pagination from './middleware/pagination.js';
 import pkg from 'pg';
 const { Pool } = pkg;
-import puppeteer from "puppeteer";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
@@ -16,10 +15,12 @@ import crypto from 'crypto';
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import { validateRequest, registerUserSchema, loginUserSchema } from "./middleware/validation.js";
+import compression from 'compression';
 
 validateEnv();
 
 const app = express();
+app.use(compression());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(security);
@@ -48,6 +49,8 @@ const authLimiter = rateLimit({
 app.use('/api/auth', authLimiter);
 
 import { createClient } from 'redis';
+import { Queue } from 'bullmq';
+import CircuitBreaker from 'opossum';
 
 // PG Pool
 const pool = new Pool({
@@ -60,6 +63,13 @@ const redisClient = createClient({
 });
 
 redisClient.on('error', (err) => logger.error('Redis Client Error', err));
+
+// BullMQ Queue for PDF Exports
+const pdfExportQueue = new Queue('pdf-export-queue', {
+    connection: {
+        url: process.env.REDIS_URL,
+    }
+});
 
 app.post('/api/auth/refresh', async (req, res, next) => {
   try {
@@ -248,29 +258,49 @@ app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, n
 
 
 // --- Gemini Proxy ---
-app.post('/api/gemini-proxy', authenticateToken, async (req, res, next) => {
-  try {
+
+const geminiAPI = async (body: any) => {
     const model = "models/gemini-1.5-pro";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
     const proxyRes = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
     });
 
     if (!proxyRes.ok) {
-      const errorText = await proxyRes.text();
-      logger.error({ error: "Gemini API error", details: errorText });
-      return res.status(proxyRes.status).json({ error: "Gemini API error", details: errorText });
+        const errorText = await proxyRes.text();
+        logger.error({ error: "Gemini API error", details: errorText });
+        const error = new Error(`Gemini API error: ${proxyRes.status} ${errorText}`);
+        (error as any).status = proxyRes.status;
+        throw error;
     }
 
-    const data = await proxyRes.json();
-    res.json(data);
+    return proxyRes.json();
+}
 
-  } catch (error) {
-    next(error);
-  }
+const geminiBreakerOptions = {
+    timeout: 15000, // 15 seconds
+    errorThresholdPercentage: 50,
+    resetTimeout: 30000 // 30 seconds
+};
+
+const geminiBreaker = new CircuitBreaker(geminiAPI, geminiBreakerOptions);
+
+geminiBreaker.on('open', () => logger.warn('Gemini circuit breaker opened'));
+geminiBreaker.on('close', () => logger.info('Gemini circuit breaker closed'));
+geminiBreaker.on('halfOpen', () => logger.info('Gemini circuit breaker is half-open'));
+geminiBreaker.on('fallback', () => logger.warn('Gemini API fallback triggered'));
+
+
+app.post('/api/gemini-proxy', authenticateToken, async (req, res, next) => {
+    try {
+        const data = await geminiBreaker.fire(req.body);
+        res.json(data);
+    } catch (error) {
+        next(error);
+    }
 });
 
 
@@ -462,75 +492,39 @@ app.delete("/api/users/:userId/stash/:itemId", async (req, res, next) => {
 });
 
 // Export PDF
-app.post("/api/export/pdf", async (req, res) => {
-  try {
-    const { html, title = "screenplay" } = req.body ?? {};
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
+app.post("/api/export/pdf", authenticateToken, async (req: any, res, next) => {
+    try {
+        const { html, title = "screenplay" } = req.body ?? {};
+        const userId = req.user.userId;
 
-    const style = `
-      <style>
-        @page { size: A4; margin: 1in 1in 1in 1.5in; }
-        html, body { font-family: system-ui, sans-serif; }
-        body { direction: rtl; }
-        .screenplay-page { padding: 0; }
-        .action { margin: 0.08in 0; text-align: right; }
-        .dialogue { margin-right: 1.5in; margin-left: 1.5in; text-align: center; margin-top: 0.06in; margin-bottom: 0.06in; }
-        .character { font-weight: 700; text-align: center; }
-        .parenthetical { text-align: center; font-style: italic; }
-        .transition { text-align: center; margin: 0.12in 0; }
-        .scene-header-line1 { display: flex; justify-content: space-between; margin: 0.2in 0 0 0; font-weight: bold; }
-        .scene-header-location { text-align: center; margin-top: 0.05in; font-weight: bold; text-decoration: underline; }
-        .basmala { text-align: left; margin: 0.2in 0; font-weight: bold; }
-      </style>
-    `;
+        if (!html) {
+            return res.status(400).json({ ok: false, error: "HTML content is required" });
+        }
 
-    await page.setContent(`
-      <!doctype html>
-      <html lang="ar" dir="rtl">
-        <head><meta charset="utf-8"/>${style}</head>
-        <body>
-          <div class="screenplay-page">
-            ${html}
-          </div>
-        </body>
-      </html>
-    `, { waitUntil: "networkidle0" });
+        const job = await pdfExportQueue.add('export-pdf', {
+            html,
+            title,
+            userId,
+        });
 
-    const pdf = await page.pdf({
-      format: "A4",
-      margin: { top: "1in", bottom: "1in", left: "1in", right: "1.5in" },
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: `<div style="font-size:8px; width:100%; padding:0 1in; text-align:center; direction:rtl;"></div>`,
-      footerTemplate: `
-        <div style="font-size:10px; width:100%; padding:0 1in; direction:rtl;">
-          <div style="text-align:center; width:100%;">
-            <span class="pageNumber"></span> / <span class="totalPages"></span>
-          </div>
-        </div>`,
-    });
-
-    await browser.close();
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${title}.pdf"`);
-    res.send(Buffer.from(pdf));
-  } catch (e: any) {
-    logger.error(e, "PDF export failed");
-    res.status(500).json({ ok: false, error: e?.message ?? "PDF error" });
-  }
+        res.status(202).json({ ok: true, jobId: job.id });
+    } catch (e: any) {
+        logger.error(e, "PDF export job creation failed");
+        next(e);
+    }
 });
 
 // Global error handler - MUST be last
 app.use(errorHandler);
 
 const PORT = process.env.PORT ?? 4000;
+let server: any;
 
 async function startServer() {
   try {
     await redisClient.connect();
     logger.info('Connected to Redis');
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       logger.info(`API on http://localhost:${PORT}`);
     });
   } catch (err) {
@@ -542,6 +536,51 @@ async function startServer() {
 if (process.env.NODE_ENV !== 'test') {
     startServer();
 }
+
+// Graceful shutdown
+const gracefulShutdown = (signal: string) => {
+    return (err?: Error) => {
+        if (err) logger.fatal(err, `Unhandled error, shutting down due to ${signal}`);
+        else logger.info(`Received ${signal}, shutting down gracefully...`);
+
+        if (server) {
+            server.close(() => {
+                logger.info('HTTP server closed.');
+                Promise.all([
+                    pool.end(),
+                    redisClient.quit(),
+                    pdfExportQueue.close(),
+                ]).then(() => {
+                    logger.info('Closed all connections.');
+                    process.exit(err ? 1 : 0);
+                }).catch(e => {
+                    logger.error(e, 'Error during graceful shutdown');
+                    process.exit(1);
+                });
+            });
+        } else {
+             Promise.all([
+                pool.end(),
+                redisClient.quit(),
+                pdfExportQueue.close(),
+            ]).then(() => {
+                logger.info('Closed all connections.');
+                process.exit(err ? 1 : 0);
+            }).catch(e => {
+                logger.error(e, 'Error during graceful shutdown');
+                process.exit(1);
+            });
+        }
+    };
+};
+
+process.on('SIGTERM', gracefulShutdown('SIGTERM'));
+process.on('SIGINT', gracefulShutdown('SIGINT'));
+process.on('uncaughtException', gracefulShutdown('uncaughtException'));
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error({ promise, reason }, 'Unhandled Rejection at Promise');
+    gracefulShutdown('unhandledRejection')(new Error(String(reason)));
+});
 
 
 export default app;
