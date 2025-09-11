@@ -1,6 +1,18 @@
 import request from 'supertest';
-import app from '../server';
 import jwt from 'jsonwebtoken';
+
+let app: any;
+
+beforeAll(async () => {
+  process.env.NODE_ENV = 'test';
+  process.env.DATABASE_URL = 'postgres://user:password@localhost:5432/test';
+  process.env.JWT_SECRET = 'test_jwt_secret_test_jwt_secret';
+  process.env.REFRESH_TOKEN_SECRET = 'test_refresh_secret_test_refresh_secret';
+  process.env.GEMINI_API_KEY = 'test_key';
+  process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
+  app = (await import('../server')).default;
+});
 
 // Mock the jsonwebtoken library
 jest.mock('jsonwebtoken');
@@ -8,7 +20,7 @@ jest.mock('jsonwebtoken');
 // Mock the global fetch function
 global.fetch = jest.fn();
 
-describe('POST /api/gemini-proxy', () => {
+describe('POST /api/llm/generate', () => {
   const mockedJwt = jwt as jest.Mocked<typeof jwt>;
 
   beforeEach(() => {
@@ -36,7 +48,7 @@ describe('POST /api/gemini-proxy', () => {
 
     // Act
     const response = await request(app)
-      .post('/api/gemini-proxy')
+      .post('/api/llm/generate')
       .set('Authorization', 'Bearer fake-token')
       .send(requestBody);
 
@@ -65,19 +77,19 @@ describe('POST /api/gemini-proxy', () => {
 
     // Act
     const response = await request(app)
-      .post('/api/gemini-proxy')
+      .post('/api/llm/generate')
       .set('Authorization', 'Bearer fake-token')
       .send(requestBody);
 
     // Assert
     expect(response.status).toBe(500);
-    expect(response.body.error).toBe('Gemini API error');
+    expect(response.body.error).toBe('An unexpected error occurred. Please try again later.');
   });
 
   test('should return 401 if no auth token is provided', async () => {
     // Act
     const response = await request(app)
-      .post('/api/gemini-proxy')
+      .post('/api/llm/generate')
       .send({});
 
     // Assert

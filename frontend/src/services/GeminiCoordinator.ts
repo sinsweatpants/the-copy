@@ -8,7 +8,7 @@ export async function auditWithGemini(chunk: LineItem[]): Promise<Array<{ lineIn
   if (!token) throw new Error("Authentication token not found");
 
   const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:4000/api";
-  const endpoint = `${apiBase}/gemini-proxy`;
+  const endpoint = `${apiBase}/llm/generate`;
 
   const system = [
     "You are an expert Arabic screenplay format validator.",

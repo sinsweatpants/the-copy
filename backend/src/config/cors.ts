@@ -1,6 +1,6 @@
 import type { CorsOptions } from 'cors';
 
-const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim());
+const allowedOrigins = process.env.FRONTEND_ORIGIN?.split(',').map(o => o.trim());
 
 const corsOptions: CorsOptions = process.env.NODE_ENV === 'production'
   ? {

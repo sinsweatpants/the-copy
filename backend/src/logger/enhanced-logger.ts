@@ -1,6 +1,6 @@
 import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'node:crypto';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -12,7 +12,7 @@ export const httpLogger = pinoHttp({
   genReqId: function (req, res) {
     const existingId = req.id ?? req.headers["x-request-id"];
     if (existingId) return existingId;
-    const id = nanoid();
+    const id = randomUUID();
     res.setHeader('X-Request-Id', id);
     return id;
   },
