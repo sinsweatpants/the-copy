@@ -13,7 +13,6 @@ End-to-end web app for Arabic screenplay writing/formatting with advanced AI int
 ```bash
 cd backend
 npm i
-npm run seed   # creates sqlite db + seed
 npm start
 ```
 

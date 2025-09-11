@@ -72,18 +72,21 @@ const pool = new Pool({
 });
 
 // Redis Client
-const redisClient = createClient({
-  url: getEnv('REDIS_URL'),
-});
+let redisClient: any;
+let pdfExportQueue: any;
+if (process.env.NODE_ENV !== 'test') {
+  redisClient = createClient({
+    url: getEnv('REDIS_URL'),
+  });
+  redisClient.on('error', (err: any) => logger.error('Redis Client Error', err));
 
-redisClient.on('error', (err) => logger.error('Redis Client Error', err));
-
-// BullMQ Queue for PDF Exports
-const pdfExportQueue = new Queue('pdf-export-queue', {
+  // BullMQ Queue for PDF Exports
+  pdfExportQueue = new Queue('pdf-export-queue', {
     connection: {
-        url: getEnv('REDIS_URL'),
-    }
-});
+      url: getEnv('REDIS_URL'),
+    },
+  });
+}
 
 app.post('/api/auth/refresh', validateRequest(refreshTokenSchema), async (req, res, next) => {
   try {
@@ -175,8 +178,12 @@ app.get('/health', async (_req, res) => {
     status.database = 'disconnected';
   }
   try {
-    await redisClient.ping();
-    status.redis = 'connected';
+    if (redisClient) {
+      await redisClient.ping();
+      status.redis = 'connected';
+    } else {
+      status.redis = 'skipped';
+    }
   } catch {
     status.redis = 'disconnected';
   }

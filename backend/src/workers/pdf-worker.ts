@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import puppeteer from 'puppeteer';
-import { logger } from '../logger/enhanced-logger.js';
+import logger from '../logger/enhanced-logger.js';
 
 const connection = {
     url: process.env.REDIS_URL,
