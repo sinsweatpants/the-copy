@@ -29,17 +29,19 @@ npm run dev
 
 Frontend runs at [http://localhost:5173](http://localhost:5173)
 
-### Env (frontend)
+### Env
 
-Create `.env` in `frontend`:
+Create `.env` files in both `backend` and `frontend` using the provided `.env.example` templates. The frontend only needs the API base URL:
 
 ```
 VITE_API_BASE=http://localhost:4000/api
-VITE_GEMINI_API_KEY=YOUR_KEY
 ```
+
+All secrets such as `GEMINI_API_KEY` are stored on the backend only.
 
 ## Notes
 
 * Tesseract uses Arabic language pack; first run may download data.
 * PDF text via `pdf.js-dist`; image-only pages fall back to OCR.
 * Paste handler enforces Arabic screenplay rules and inserts structured HTML into Tiptap.
+* All LLM requests are proxied through `POST /api/llm/generate` to keep API keys server-side.
