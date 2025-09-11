@@ -1,7 +1,11 @@
 import express from "express";
 import cors from "cors";
-import pinoHttp from "pino-http";
-import logger from "./logger.js";
+import validateEnv from './config/validator.js';
+import corsOptions from './config/cors.js';
+import inputSanitizer from './middleware/input-sanitizer.js';
+import security from './middleware/security.js';
+import { httpLogger, default as logger } from './logger/enhanced-logger.js';
+import pagination from './middleware/pagination.js';
 import pkg from 'pg';
 const { Pool } = pkg;
 import puppeteer from "puppeteer";
@@ -13,16 +17,14 @@ import crypto from 'crypto';
 import { errorHandler } from "./middleware/errorHandler.js";
 import { validateRequest, registerUserSchema, loginUserSchema } from "./middleware/validation.js";
 
+validateEnv();
+
 const app = express();
-if (process.env.NODE_ENV === 'production') {
-  app.use(cors({
-    origin: process.env.CORS_ORIGIN,
-  }));
-} else {
-  app.use(cors());
-}
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
-app.use(pinoHttp({ logger }));
+app.use(security);
+app.use(inputSanitizer);
+app.use(httpLogger);
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -111,8 +113,8 @@ app.post('/api/auth/logout', async (req, res, next) => {
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
 
-// TODO: Move to .env
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET ?? 'a-very-secret-refresh-key';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+if (!REFRESH_TOKEN_SECRET) throw new Error('REFRESH_TOKEN_SECRET is required');
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -145,26 +147,28 @@ function notFound(res: any) {
 }
 
 // --- Health Check ---
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
+  const status = { database: 'unknown', redis: 'unknown' };
   try {
-    // Check database connection
     await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV,
-      database: 'connected',
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      database: 'disconnected',
-      error: (error as Error).message,
-    });
+    status.database = 'connected';
+  } catch {
+    status.database = 'disconnected';
   }
+  try {
+    await redisClient.ping();
+    status.redis = 'connected';
+  } catch {
+    status.redis = 'disconnected';
+  }
+  const healthy = status.database === 'connected' && status.redis === 'connected';
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    ...status,
+  });
 });
 
 // --- API
@@ -274,6 +278,20 @@ app.post('/api/gemini-proxy', authenticateToken, async (req, res, next) => {
 app.use('/api/screenplays', authenticateToken);
 app.use('/api/users/:userId', authenticateToken);
 
+
+app.get('/api/screenplays', pagination, async (req, res, next) => {
+  try {
+    const { page, limit, offset } = (req as any).pagination;
+    const userId = (req as any).user.userId;
+    const result = await pool.query(
+      'SELECT * FROM screenplays WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [userId, limit, offset]
+    );
+    const totalRes = await pool.query('SELECT COUNT(*) FROM screenplays WHERE user_id=$1', [userId]);
+    const total = parseInt(totalRes.rows[0].count, 10);
+    ok(res, { screenplays: result.rows, page, limit, total, hasNext: offset + limit < total });
+  } catch (e) { next(e); }
+});
 
 // Screenplay metadata
 app.get("/api/screenplays/:id", async (req, res, next) => {
@@ -411,10 +429,16 @@ app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
 });
 
 // Stash
-app.get("/api/users/:userId/stash", async (req, res, next) => {
+app.get("/api/users/:userId/stash", pagination, async (req, res, next) => {
   try {
-    const result = await pool.query("SELECT * FROM stash WHERE user_id=$1 ORDER BY created_at DESC", [req.params.userId]);
-    ok(res, result.rows);
+    const { page, limit, offset } = (req as any).pagination;
+    const result = await pool.query(
+      "SELECT * FROM stash WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+      [req.params.userId, limit, offset]
+    );
+    const totalRes = await pool.query("SELECT COUNT(*) FROM stash WHERE user_id=$1", [req.params.userId]);
+    const total = parseInt(totalRes.rows[0].count, 10);
+    ok(res, { items: result.rows, page, limit, total, hasNext: offset + limit < total });
   } catch(e) { next(e); }
 });
 

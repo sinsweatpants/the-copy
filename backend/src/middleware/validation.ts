@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { passwordSchema } from '../validators/password.js';
 
 export const validateRequest = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -34,7 +35,7 @@ export const registerUserSchema = z.object({
   body: z.object({
     email: z.string().email(),
     username: z.string().min(3).max(20),
-    password: z.string().min(8),
+    password: passwordSchema,
   }),
 });
 
