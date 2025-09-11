@@ -1,11 +1,19 @@
+import { z } from 'zod';
 import logger from '../logger/enhanced-logger.js';
 
-const requiredEnv = ['DATABASE_URL', 'JWT_SECRET', 'GEMINI_API_KEY', 'REDIS_URL'];
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  JWT_SECRET: z.string().min(32),
+  REFRESH_TOKEN_SECRET: z.string().min(32),
+  GEMINI_API_KEY: z.string().min(1),
+  REDIS_URL: z.string().url(),
+  CORS_ORIGIN: z.string().optional(),
+});
 
 export default function validateEnv() {
-  const missing = requiredEnv.filter(key => !process.env[key]);
-  if (missing.length > 0) {
-    logger.error({ missing }, 'Missing required environment variables');
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  const parsed = envSchema.safeParse(process.env);
+  if (!parsed.success) {
+    logger.error({ errors: parsed.error.flatten().fieldErrors }, 'Invalid environment variables');
+    throw new Error('Invalid environment variables');
   }
 }

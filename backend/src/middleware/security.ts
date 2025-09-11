@@ -12,4 +12,12 @@ export default helmet({
       objectSrc: ["'none'"],
     },
   },
+  referrerPolicy: { policy: 'no-referrer' },
+  frameguard: { action: 'deny' },
+  hidePoweredBy: true,
+  hsts: process.env.NODE_ENV === 'production'
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : undefined,
+  noSniff: true,
+  crossOriginResourcePolicy: { policy: 'same-origin' },
 });
