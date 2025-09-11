@@ -310,6 +310,7 @@ geminiBreaker.on('fallback', () => logger.warn('Gemini API fallback triggered'))
 
 app.post('/api/llm/generate', authenticateToken, async (req, res, next) => {
     try {
+        logger.info({ userId: (req as any).user.userId }, 'LLM request');
         const data = await geminiBreaker.fire(req.body);
         res.json(data);
     } catch (error) {
@@ -321,6 +322,8 @@ app.post('/api/llm/generate', authenticateToken, async (req, res, next) => {
 // Apply auth middleware
 app.use('/api/screenplays', authenticateToken);
 app.use('/api/users/:userId', authenticateToken);
+app.use('/api/characters', authenticateToken);
+app.use('/api/dialogues', authenticateToken);
 
 
 app.get('/api/screenplays', pagination, async (req, res, next) => {
@@ -328,10 +331,10 @@ app.get('/api/screenplays', pagination, async (req, res, next) => {
     const { page, limit, offset } = (req as any).pagination;
     const userId = (req as any).user.userId;
     const result = await pool.query(
-      'SELECT * FROM screenplays WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM screenplays WHERE owner_user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [userId, limit, offset]
     );
-    const totalRes = await pool.query('SELECT COUNT(*) FROM screenplays WHERE user_id=$1', [userId]);
+    const totalRes = await pool.query('SELECT COUNT(*) FROM screenplays WHERE owner_user_id=$1', [userId]);
     const total = parseInt(totalRes.rows[0].count, 10);
     ok(res, { screenplays: result.rows, page, limit, total, hasNext: offset + limit < total });
   } catch (e) { next(e); }
@@ -340,7 +343,8 @@ app.get('/api/screenplays', pagination, async (req, res, next) => {
 // Screenplay metadata
 app.get("/api/screenplays/:id", async (req, res, next) => {
   try {
-    const result = await pool.query("SELECT * FROM screenplays WHERE id=$1", [req.params.id]);
+    const userId = (req as any).user.userId;
+    const result = await pool.query("SELECT * FROM screenplays WHERE id=$1 AND owner_user_id=$2", [req.params.id, userId]);
     const row = result.rows[0];
     if (!row) return notFound(res);
     ok(res, row);
@@ -356,7 +360,8 @@ app.get("/api/screenplays/:id/content", async (req, res, next) => {
       return ok(res, JSON.parse(cachedData));
     }
 
-    const result = await pool.query("SELECT html, updated_at FROM screenplay_content WHERE screenplay_id=$1", [req.params.id]);
+    const userId = (req as any).user.userId;
+    const result = await pool.query("SELECT html, updated_at FROM screenplay_content WHERE screenplay_id=$1 AND owner_user_id=$2", [req.params.id, userId]);
     const data = result.rows[0] ?? { html: "", updatedAt: null };
 
     // Cache for 1 hour
@@ -371,12 +376,13 @@ app.put("/api/screenplays/:id/content", async (req, res, next) => {
   try {
     const { html } = req.body ?? { html: "" };
     const now = new Date();
+    const userId = (req as any).user.userId;
     const result = await pool.query(`
-      INSERT INTO screenplay_content (screenplay_id, html, updated_at)
-      VALUES ($1, $2, $3)
+      INSERT INTO screenplay_content (screenplay_id, html, updated_at, owner_user_id)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT(screenplay_id) DO UPDATE SET html=excluded.html, updated_at=excluded.updated_at
       RETURNING updated_at
-    `, [req.params.id, html ?? "", now]);
+    `, [req.params.id, html ?? "", now, userId]);
 
     // Invalidate cache
     await redisClient.del(cacheKey);
@@ -394,7 +400,8 @@ app.get("/api/screenplays/:id/characters", async (req, res, next) => {
       return ok(res, JSON.parse(cachedData));
     }
 
-    const result = await pool.query("SELECT * FROM characters WHERE screenplay_id=$1", [req.params.id]);
+    const userId = (req as any).user.userId;
+    const result = await pool.query("SELECT * FROM characters WHERE screenplay_id=$1 AND owner_user_id=$2", [req.params.id, userId]);
     const data = result.rows;
 
     // Cache for 1 hour
@@ -408,9 +415,10 @@ app.post("/api/screenplays/:id/characters", async (req, res, next) => {
   const cacheKey = `screenplay:characters:${req.params.id}`;
   try {
     const { name, role } = req.body ?? {};
+    const userId = (req as any).user.userId;
     const result = await pool.query(
-      `INSERT INTO characters (screenplay_id, name, role) VALUES ($1, $2, $3) RETURNING id, name, role`,
-      [req.params.id, name ?? "بدون اسم", role ?? ""]
+      `INSERT INTO characters (screenplay_id, name, role, owner_user_id) VALUES ($1, $2, $3, $4) RETURNING id, name, role`,
+      [req.params.id, name ?? "بدون اسم", role ?? "", userId]
     );
 
     // Invalidate cache
@@ -423,7 +431,8 @@ app.post("/api/screenplays/:id/characters", async (req, res, next) => {
 // Dialogues
 app.get("/api/characters/:id/dialogues", async (req, res, next) => {
   try {
-    const result = await pool.query("SELECT * FROM dialogues WHERE character_id=$1", [req.params.id]);
+    const userId = (req as any).user.userId;
+    const result = await pool.query("SELECT * FROM dialogues WHERE character_id=$1 AND owner_user_id=$2", [req.params.id, userId]);
     ok(res, result.rows);
   } catch(e) { next(e); }
 });
@@ -431,7 +440,8 @@ app.get("/api/characters/:id/dialogues", async (req, res, next) => {
 app.put("/api/dialogues/:dialogueId", async (req, res, next) => {
   try {
     const { text } = req.body ?? {};
-    await pool.query("UPDATE dialogues SET text=$1 WHERE id=$2", [text ?? "", req.params.dialogueId]);
+    const userId = (req as any).user.userId;
+    await pool.query("UPDATE dialogues SET text=$1 WHERE id=$2 AND owner_user_id=$3", [text ?? "", req.params.dialogueId, userId]);
     ok(res, { id: req.params.dialogueId, text });
   } catch(e) { next(e); }
 });
@@ -439,16 +449,20 @@ app.put("/api/dialogues/:dialogueId", async (req, res, next) => {
 // Sprints
 app.get("/api/users/:userId/sprints/active", async (req, res, next) => {
   try {
-    const result = await pool.query("SELECT * FROM sprints WHERE user_id=$1 AND is_active=true ORDER BY started_at DESC LIMIT 1", [req.params.userId]);
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
+    const result = await pool.query("SELECT * FROM sprints WHERE owner_user_id=$1 AND is_active=true ORDER BY started_at DESC LIMIT 1", [userId]);
     ok(res, result.rows[0] ?? null);
   } catch(e) { next(e); }
 });
 
 app.post("/api/users/:userId/sprints", async (req, res, next) => {
   try {
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
     const result = await pool.query(
-      `INSERT INTO sprints (user_id, is_active) VALUES ($1, true) RETURNING id, started_at, is_active`,
-      [req.params.userId]
+      `INSERT INTO sprints (owner_user_id, is_active) VALUES ($1, true) RETURNING id, started_at, is_active`,
+      [userId]
     );
     ok(res, result.rows[0]);
   } catch(e) { next(e); }
@@ -456,16 +470,18 @@ app.post("/api/users/:userId/sprints", async (req, res, next) => {
 
 app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
   try {
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
     const { action, durationSec } = req.body ?? {};
     if (action === "end") {
       await pool.query(
-        `UPDATE sprints SET is_active=false, ended_at=current_timestamp, duration_sec=$1 WHERE id=$2 AND user_id=$3`,
-        [durationSec ?? null, req.params.sprintId, req.params.userId]
+        `UPDATE sprints SET is_active=false, ended_at=current_timestamp, duration_sec=$1 WHERE id=$2 AND owner_user_id=$3`,
+        [durationSec ?? null, req.params.sprintId, userId]
       );
     } else if (action === "pause") {
       await pool.query(
-        `UPDATE sprints SET is_active=false WHERE id=$1 AND user_id=$2`,
-        [req.params.sprintId, req.params.userId]
+        `UPDATE sprints SET is_active=false WHERE id=$1 AND owner_user_id=$2`,
+        [req.params.sprintId, userId]
       );
     }
     ok(res, { id: req.params.sprintId, action });
@@ -475,12 +491,14 @@ app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
 // Stash
 app.get("/api/users/:userId/stash", pagination, async (req, res, next) => {
   try {
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
     const { page, limit, offset } = (req as any).pagination;
     const result = await pool.query(
-      "SELECT * FROM stash WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-      [req.params.userId, limit, offset]
+      "SELECT * FROM stash WHERE owner_user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+      [userId, limit, offset]
     );
-    const totalRes = await pool.query("SELECT COUNT(*) FROM stash WHERE user_id=$1", [req.params.userId]);
+    const totalRes = await pool.query("SELECT COUNT(*) FROM stash WHERE owner_user_id=$1", [userId]);
     const total = parseInt(totalRes.rows[0].count, 10);
     ok(res, { items: result.rows, page, limit, total, hasNext: offset + limit < total });
   } catch(e) { next(e); }
@@ -488,11 +506,13 @@ app.get("/api/users/:userId/stash", pagination, async (req, res, next) => {
 
 app.post("/api/users/:userId/stash", async (req, res, next) => {
   try {
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
     const { text, type } = req.body ?? {};
     const wordCount = (text ?? "").trim().split(/\s+/).filter(Boolean).length;
     const result = await pool.query(
-      `INSERT INTO stash (user_id, text, type, word_count) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [req.params.userId, text ?? "", type ?? "snippet", wordCount]
+      `INSERT INTO stash (owner_user_id, text, type, word_count) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [userId, text ?? "", type ?? "snippet", wordCount]
     );
     ok(res, { id: result.rows[0].id });
   } catch(e) { next(e); }
@@ -500,7 +520,9 @@ app.post("/api/users/:userId/stash", async (req, res, next) => {
 
 app.delete("/api/users/:userId/stash/:itemId", async (req, res, next) => {
   try {
-    await pool.query("DELETE FROM stash WHERE id=$1 AND user_id=$2", [req.params.itemId, req.params.userId]);
+    const userId = (req as any).user.userId;
+    if (req.params.userId !== userId) return res.sendStatus(403);
+    await pool.query("DELETE FROM stash WHERE id=$1 AND owner_user_id=$2", [req.params.itemId, userId]);
     ok(res, true);
   } catch(e) { next(e); }
 });
@@ -510,6 +532,7 @@ app.post("/api/export/pdf", authenticateToken, async (req: any, res, next) => {
     try {
         const { html, title = "screenplay" } = req.body ?? {};
         const userId = req.user.userId;
+        logger.info({ userId }, 'PDF export requested');
 
         if (!html) {
             return res.status(400).json({ ok: false, error: "HTML content is required" });
