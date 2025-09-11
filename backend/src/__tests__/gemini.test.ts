@@ -7,12 +7,13 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = 'postgres://user:password@localhost:5432/test';
   process.env.JWT_SECRET = 'test_jwt_secret_test_jwt_secret';
-  process.env.REFRESH_TOKEN_SECRET = 'test_refresh_secret_test_refresh_secret';
+  process.env.REFRESH_TOKEN_SECRET = 'test_refresh_secret_test_jwt_secret';
   process.env.GEMINI_API_KEY = 'test_key';
   process.env.REDIS_URL = 'redis://localhost:6379';
   process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
   app = (await import('../server')).default;
 });
+
 
 // Mock the jsonwebtoken library
 jest.mock('jsonwebtoken');
