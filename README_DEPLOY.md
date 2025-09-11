@@ -51,10 +51,11 @@ Example cron job:
 ```
 
 ## CI/CD
-GitHub Actions run on each push and pull request to `main`:
-- `npm run build`
-- `npm run lint`
-- `npm test`
-- Secret scanning via gitleaks
-- Dependency audit via `npm audit`
-Protect the `main` branch to require a green CI run before merging.
+GitHub Actions run on every push or pull request to `main` and any `feature/*` branch. The workflow defines four jobs:
+
+- **build-backend** – install, lint, build, and test the backend
+- **build-frontend** – install, lint, build, and test the frontend
+- **audit** – run `npm audit --omit=dev` to check dependencies
+- **secret-scan** – scan the repository for secrets using TruffleHog
+
+The `main` branch is protected and can only be merged via a pull request that passes all CI jobs and has at least one approved review.
