@@ -14,8 +14,9 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 
 import { errorHandler } from "./middleware/errorHandler.js";
-import { validateRequest, registerUserSchema, loginUserSchema } from "./middleware/validation.js";
+import { validateRequest, registerUserSchema, loginUserSchema, refreshTokenSchema, logoutSchema } from "./middleware/validation.js";
 import compression from 'compression';
+import { getEnv } from './config/secrets.js';
 
 validateEnv();
 
@@ -54,12 +55,12 @@ import CircuitBreaker from 'opossum';
 
 // PG Pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: getEnv('DATABASE_URL'),
 });
 
 // Redis Client
 const redisClient = createClient({
-  url: process.env.REDIS_URL,
+  url: getEnv('REDIS_URL'),
 });
 
 redisClient.on('error', (err) => logger.error('Redis Client Error', err));
@@ -67,11 +68,11 @@ redisClient.on('error', (err) => logger.error('Redis Client Error', err));
 // BullMQ Queue for PDF Exports
 const pdfExportQueue = new Queue('pdf-export-queue', {
     connection: {
-        url: process.env.REDIS_URL,
+        url: getEnv('REDIS_URL'),
     }
 });
 
-app.post('/api/auth/refresh', async (req, res, next) => {
+app.post('/api/auth/refresh', validateRequest(refreshTokenSchema), async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
@@ -97,7 +98,6 @@ app.post('/api/auth/refresh', async (req, res, next) => {
       return res.sendStatus(403);
     }
 
-    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
     const accessToken = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
 
     res.json({ accessToken });
@@ -107,7 +107,7 @@ app.post('/api/auth/refresh', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/logout', async (req, res, next) => {
+app.post('/api/auth/logout', validateRequest(logoutSchema), async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
     if (refreshToken) {
@@ -120,16 +120,12 @@ app.post('/api/auth/logout', async (req, res, next) => {
 });
 
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
-
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
-if (!REFRESH_TOKEN_SECRET) throw new Error('REFRESH_TOKEN_SECRET is required');
+const JWT_SECRET = getEnv('JWT_SECRET');
+const REFRESH_TOKEN_SECRET = getEnv('REFRESH_TOKEN_SECRET');
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
+const GEMINI_API_KEY = getEnv('GEMINI_API_KEY');
 
 // --- Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
@@ -207,7 +203,6 @@ app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, 
     const user = newUserResult.rows[0];
 
     // Generate JWT
-    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
     const token = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token, user });
@@ -235,7 +230,6 @@ app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, n
     }
 
     // Generate tokens
-    if (!JWT_SECRET) throw new Error("JWT_SECRET is required for signing");
     const accessToken = jwt.sign({ userId: user.id, email: user.email, username: user.username }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
     const refreshToken = crypto.randomBytes(64).toString('hex');
     const refreshTokenExpiry = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_MS);

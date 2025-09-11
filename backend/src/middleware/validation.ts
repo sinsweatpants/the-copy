@@ -45,3 +45,15 @@ export const loginUserSchema = z.object({
     password: z.string(),
   }),
 });
+
+export const refreshTokenSchema = z.object({
+  body: z.object({
+    refreshToken: z.string().min(1),
+  }),
+});
+
+export const logoutSchema = z.object({
+  body: z.object({
+    refreshToken: z.string().optional(),
+  }),
+});
