@@ -58,4 +58,8 @@ GitHub Actions run on every push or pull request to `main` and any `feature/*` b
 - **audit** – run `npm audit --omit=dev` to check dependencies
 - **secret-scan** – scan the repository for secrets using TruffleHog
 
+The secret scan excludes test fixtures via `.trufflehogignore` and uses dummy secrets.
+
+The audit job fails the build on any high or critical vulnerabilities; run `npm audit --omit=dev` locally before pushing.
+
 The `main` branch is protected and can only be merged via a pull request that passes all CI jobs and has at least one approved review.
