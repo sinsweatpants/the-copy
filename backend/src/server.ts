@@ -17,6 +17,11 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { validateRequest, registerUserSchema, loginUserSchema, refreshTokenSchema, logoutSchema } from "./middleware/validation.js";
 import compression from 'compression';
 import { getEnv } from './config/secrets.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 validateEnv();
 
@@ -581,6 +586,51 @@ app.post("/api/export/pdf", authenticateToken, async (req: express.Request, res:
         next(e);
     }
 });
+
+// Serve frontend if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+    const frontendDist = path.resolve(__dirname, '..', '..', 'frontend', 'dist');
+    
+    // Log the path to ensure it's correct
+    logger.info(`Serving frontend from: ${frontendDist}`);
+
+    // Check if the directory exists
+    try {
+        const fs = require('fs');
+        if (fs.existsSync(frontendDist)) {
+            logger.info('Frontend dist directory exists.');
+        } else {
+            logger.warn('Frontend dist directory does not exist. Frontend will not be served.');
+        }
+    } catch (e) {
+        logger.error(e, 'Error checking for frontend dist directory');
+    }
+
+    app.use(express.static(frontendDist));
+
+    app.get('*', (req, res, next) => {
+        // If the request is for an API route, pass it to the next handler
+        if (req.originalUrl.startsWith('/api/')) {
+            return next();
+        }
+        // Otherwise, serve the index.html file
+        res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+            if (err) {
+                // If the file doesn't exist, it's a 404, but we let the client-side routing handle it.
+                // If there's another error, we pass it to the error handler.
+                if (err.status === 404) {
+                    // This is expected if the path is a client-side route, so we don't log an error.
+                    // The client-side router will handle the 404.
+                    // We can't just next() here, as that would fall through to the error handler.
+                    // We must send a response.
+                    res.status(404).send('Resource not found');
+                } else {
+                    next(err);
+                }
+            }
+        });
+    });
+}
 
 // Global error handler - MUST be last
 app.use(errorHandler);
