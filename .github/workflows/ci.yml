@@ -48,7 +48,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm audit --omit=dev
+      - run: |
+          cd backend && npm audit --omit=dev
+          cd ../frontend && npm audit --omit=dev
 
   secret-scan:
     runs-on: ubuntu-latest

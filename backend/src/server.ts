@@ -144,7 +144,7 @@ const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const GEMINI_API_KEY = getEnv('GEMINI_API_KEY');
 
 // --- Auth Middleware
-const authenticateToken = (req: any, res: any, next: any) => {
+const authenticateToken = async (req: any, res: any, next: any) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -152,9 +152,17 @@ const authenticateToken = (req: any, res: any, next: any) => {
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     req.user = user;
+    
+    // Set the current user ID for RLS policies
+    try {
+      await pool.query('SET LOCAL app.current_user_id = $1', [user.userId]);
+    } catch (error) {
+      logger.error('Failed to set current_user_id:', error);
+    }
+    
     next();
   });
 };

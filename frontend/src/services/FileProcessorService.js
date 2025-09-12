@@ -34,14 +34,12 @@ export const processImportedFiles = async (files) => {
     try {
       // التعامل مع ملفات PDF بشكل خاص باستخدام مسار OCR المتقدم المذكور في الكود المصدري
       if (fileName.endsWith('.pdf')) {
-        console.log(`[FileProcessor] استخدام مسار OCR المتقدم للملف: ${file.name}`);
         isPDFSource = true;
         // استدعاء الدالة المخصصة لمعالجة PDF مع Tesseract
         textContent = await processPDFWithTesseract(file);
         
       } else {
         // لجميع الأنواع الأخرى المدعومة (مثل txt, docx), نستخدم خدمة القراءة الموحدة
-        console.log(`[FileProcessor] استخدام القارئ القياسي للملف: ${file.name}`);
         textContent = await fileReaderService.extractTextFromFile(file);
       }
 
@@ -52,7 +50,6 @@ export const processImportedFiles = async (files) => {
 
     } catch (error) {
       // في حالة فشل معالجة ملف، نسجل الخطأ وننتقل إلى الملف التالي
-      console.error(`[FileProcessor] فشل معالجة الملف "${file.name}":`, error);
       // يمكن إضافة إشعار للمستخدم هنا بأن ملفًا معينًا قد فشل
       continue;
     }
