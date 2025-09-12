@@ -1,6 +1,7 @@
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { randomUUID } from 'node:crypto';
+import type { Request, Response } from 'express';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -9,14 +10,18 @@ const logger = pino({
 
 export const httpLogger = pinoHttp({
   logger,
-  genReqId: function (req, res) {
+  genReqId: function (req: Request, res: Response) {
     const existingId = req.id ?? req.headers["x-request-id"];
     if (existingId) return existingId;
     const id = randomUUID();
     res.setHeader('X-Request-Id', id);
     return id;
   },
-  customLogLevel: function (req, res, err) {
+  customLogLevel: function (
+    req: Request,
+    res: Response,
+    err: Error | undefined,
+  ) {
     if (res.statusCode >= 400 && res.statusCode < 500) {
       return 'warn';
     } else if (res.statusCode >= 500 || err) {
@@ -26,17 +31,21 @@ export const httpLogger = pinoHttp({
     }
     return 'info';
   },
-  customSuccessMessage: function (req, res) {
+  customSuccessMessage: function (req: Request, res: Response) {
     if (res.statusCode === 404) {
       return 'resource not found';
     }
     return `${req.method} ${req.url} completed`;
   },
-  customErrorMessage: function (req, res, err) {
+  customErrorMessage: function (
+    req: Request,
+    res: Response,
+    err: Error,
+  ) {
     return `${req.method} ${req.url} errored with status ${res.statusCode}`;
   },
   serializers: {
-    req: function (req) {
+    req: function (req: Request) {
       return {
         method: req.method,
         url: req.url,
@@ -45,11 +54,11 @@ export const httpLogger = pinoHttp({
           'user-agent': req.headers['user-agent'],
           'content-type': req.headers['content-type'],
         },
-        remoteAddress: req.remoteAddress,
-        remotePort: req.remotePort,
+        remoteAddress: req.socket.remoteAddress,
+        remotePort: req.socket.remotePort,
       };
     },
-    res: function (res) {
+    res: function (res: Response) {
       return {
         statusCode: res.statusCode,
         headers: {
