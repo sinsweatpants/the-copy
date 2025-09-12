@@ -23,6 +23,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+interface HttpError extends Error {
+  status?: number;
+}
+
 validateEnv();
 
 const app = express();
@@ -322,8 +326,8 @@ const geminiAPI = async (body: any) => {
     if (!proxyRes.ok) {
         const errorText = await proxyRes.text();
         logger.error({ error: "Gemini API error", details: errorText });
-        const error = new Error(`Gemini API error: ${proxyRes.status} ${errorText}`);
-        (error as any).status = proxyRes.status;
+        const error: HttpError = new Error(`Gemini API error: ${proxyRes.status} ${errorText}`);
+        error.status = proxyRes.status;
         throw error;
     }
 
@@ -608,13 +612,13 @@ if (process.env.NODE_ENV !== 'test') {
 
     app.use(express.static(frontendDist));
 
-    app.get('*', (req, res, next) => {
+    app.get('*', (req: express.Request, res: express.Response, next: express.NextFunction) => {
         // If the request is for an API route, pass it to the next handler
         if (req.originalUrl.startsWith('/api/')) {
             return next();
         }
         // Otherwise, serve the index.html file
-        res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+        res.sendFile(path.join(frontendDist, 'index.html'), (err: HttpError | null) => {
             if (err) {
                 // If the file doesn't exist, it's a 404, but we let the client-side routing handle it.
                 // If there's another error, we pass it to the error handler.
