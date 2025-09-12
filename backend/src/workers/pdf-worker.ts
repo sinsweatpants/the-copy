@@ -1,4 +1,4 @@
-import { Worker } from 'bullmq';
+import { Worker, Job } from 'bullmq';
 import puppeteer from 'puppeteer';
 import logger from '../logger/enhanced-logger.js';
 
@@ -6,7 +6,7 @@ const connection = {
     url: process.env.REDIS_URL,
 };
 
-const worker = new Worker('pdf-export-queue', async (job) => {
+const worker = new Worker('pdf-export-queue', async (job: Job) => {
     const { html, title = "screenplay", userId } = job.data;
     logger.info({ job: job.id, userId }, "Processing PDF export job");
 
@@ -76,11 +76,11 @@ const worker = new Worker('pdf-export-queue', async (job) => {
     }
 }, { connection });
 
-worker.on('completed', (job) => {
+worker.on('completed', (job: Job) => {
   logger.info({ job: job.id }, `Job completed successfully`);
 });
 
-worker.on('failed', (job, err) => {
+worker.on('failed', (job: Job | undefined, err: Error) => {
   if (job) {
     logger.error({ job: job.id, error: err.message }, `Job failed`);
   } else {

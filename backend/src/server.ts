@@ -97,7 +97,14 @@ if (process.env.NODE_ENV !== 'test' && process.env.REDIS_ENABLED === 'true') {
   });
 }
 
-app.post('/api/auth/refresh', validateRequest(refreshTokenSchema), async (req, res, next) => {
+app.post(
+  '/api/auth/refresh',
+  validateRequest(refreshTokenSchema),
+  async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
@@ -132,7 +139,14 @@ app.post('/api/auth/refresh', validateRequest(refreshTokenSchema), async (req, r
   }
 });
 
-app.post('/api/auth/logout', validateRequest(logoutSchema), async (req, res, next) => {
+app.post(
+  '/api/auth/logout',
+  validateRequest(logoutSchema),
+  async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
   try {
     const { refreshToken } = req.body;
     if (refreshToken) {
