@@ -1,12 +1,11 @@
 // filepath: backend/src/server.ts
+import "./config/load-env.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
 
-// --- تحميل ملف .env من الجذر
+// --- حساب المسارات
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 import express from "express";
 import cors from "cors";
@@ -20,8 +19,8 @@ import { createClient } from "redis";
 import { Queue } from "bullmq";
 import CircuitBreaker from "opossum";
 
-import validateEnv from "./config/validator.js";
 import corsOptions from "./config/cors.js";
+import { env } from "./config/validator.js";
 import inputSanitizer from "./middleware/input-sanitizer.js";
 import security from "./middleware/security.js";
 import { httpLogger, default as logger } from "./logger/enhanced-logger.js";
@@ -34,14 +33,10 @@ import {
   refreshTokenSchema,
   logoutSchema,
 } from "./middleware/validation.js";
-import { getEnv } from "./config/secrets.js";
 
 interface HttpError extends Error {
   status?: number;
 }
-
-// --- تحقق من متغيرات البيئة
-validateEnv();
 
 const app = express();
 app.use(compression());
@@ -54,28 +49,28 @@ app.use(httpLogger);
 // --- PostgreSQL Pool
 const { Pool } = pkg;
 const pool = new Pool({
-  connectionString: getEnv("DATABASE_URL"),
+  connectionString: env.DATABASE_URL,
 });
 
 // --- Redis Client + BullMQ
 let redisClient: any;
 let pdfExportQueue: any;
-if (process.env.NODE_ENV !== "test" && process.env.REDIS_ENABLED === "true") {
-  redisClient = createClient({ url: getEnv("REDIS_URL") });
+if (env.NODE_ENV !== "test" && process.env.REDIS_ENABLED === "true") {
+  redisClient = createClient({ url: env.REDIS_URL });
   redisClient.on("error", (err: Error) =>
     logger.error({ err }, "Redis Client Error")
   );
   pdfExportQueue = new Queue("pdf-export-queue", {
-    connection: { url: getEnv("REDIS_URL") },
+    connection: { url: env.REDIS_URL },
   });
 }
 
 // --- Constants
-const JWT_SECRET = getEnv("JWT_SECRET");
-const REFRESH_TOKEN_SECRET = getEnv("REFRESH_TOKEN_SECRET");
+const JWT_SECRET = env.JWT_SECRET;
+const REFRESH_TOKEN_SECRET = env.REFRESH_TOKEN_SECRET;
 const ACCESS_TOKEN_EXPIRES_IN = "15m";
 const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 أيام
-const GEMINI_API_KEY = getEnv("GEMINI_API_KEY");
+const GEMINI_API_KEY = env.GEMINI_API_KEY;
 
 // --- Middleware: Authentication
 const authenticateToken = async (
@@ -144,7 +139,7 @@ app.post("/api/llm/generate", authenticateToken, async (req, res, next) => {
 });
 
 // --- Serve Frontend
-if (process.env.NODE_ENV !== "test") {
+if (env.NODE_ENV !== "test") {
   const frontendDist = path.resolve(__dirname, "../../frontend/dist");
   app.use(express.static(frontendDist));
   app.get("*", (req, res, next) => {
@@ -157,7 +152,8 @@ if (process.env.NODE_ENV !== "test") {
 app.use(errorHandler);
 
 // --- Start Server
-const PORT = process.env.PORT ?? 4000;
-app.listen(PORT, () => logger.info(`API running on http://localhost:${PORT}`));
+app.listen(env.PORT, () =>
+  logger.info(`API running on http://localhost:${env.PORT}`)
+);
 
 export default app;

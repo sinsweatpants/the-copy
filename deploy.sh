@@ -20,6 +20,12 @@ ssh $SERVER << EOF
   echo "→ Navigating to application directory: ${APP_DIR}"
   cd ${APP_DIR}
 
+  if [ ! -f ".env" ] && [ ! -f "backend/.env" ]; then
+    echo "❌ لا يوجد .env في $APP_DIR أو backend/.env" >&2
+    exit 1
+  fi
+  echo "✅ .env جاهز"
+
   echo "→ Pulling latest changes from main branch..."
   git pull origin main
 
