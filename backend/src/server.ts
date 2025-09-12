@@ -74,11 +74,11 @@ const pool = new Pool({
 // Redis Client
 let redisClient: any;
 let pdfExportQueue: any;
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && process.env.REDIS_ENABLED === 'true') {
   redisClient = createClient({
     url: getEnv('REDIS_URL'),
   });
-  redisClient.on('error', (err: any) => logger.error('Redis Client Error', err));
+  redisClient.on('error', (err: Error) => logger.error({ err }, 'Redis Client Error'));
 
   // BullMQ Queue for PDF Exports
   pdfExportQueue = new Queue('pdf-export-queue', {
@@ -144,7 +144,7 @@ const REFRESH_TOKEN_EXPIRES_IN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const GEMINI_API_KEY = getEnv('GEMINI_API_KEY');
 
 // --- Auth Middleware
-const authenticateToken = async (req: any, res: any, next: any) => {
+const authenticateToken = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -152,15 +152,15 @@ const authenticateToken = async (req: any, res: any, next: any) => {
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, async (err: Error | null, user: any) => {
     if (err) return res.sendStatus(403);
-    req.user = user;
+    (req as any).user = user;
     
     // Set the current user ID for RLS policies
     try {
       await pool.query('SET LOCAL app.current_user_id = $1', [user.userId]);
     } catch (error) {
-      logger.error('Failed to set current_user_id:', error);
+      logger.error({ error }, 'Failed to set current_user_id');
     }
     
     next();
@@ -169,15 +169,15 @@ const authenticateToken = async (req: any, res: any, next: any) => {
 
 
 // --- Helpers
-function ok(res: any, data: unknown) {
+function ok(res: express.Response, data: unknown) {
   res.json({ ok: true, data });
 }
-function notFound(res: any) {
+function notFound(res: express.Response) {
   res.status(404).json({ ok: false, error: "Not found" });
 }
 
 // --- Health Check ---
-app.get('/health', async (_req, res) => {
+app.get('/health', async (_req: express.Request, res: express.Response) => {
   const status = { database: 'unknown', redis: 'unknown' };
   try {
     await pool.query('SELECT 1');
@@ -210,7 +210,7 @@ app.get('/health', async (_req, res) => {
 // --- Auth Endpoints ---
 
 // Register new user
-app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, res, next) => {
+app.post('/api/auth/register', validateRequest(registerUserSchema), async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const { email, username, password } = req.body;
 
@@ -240,7 +240,7 @@ app.post('/api/auth/register', validateRequest(registerUserSchema), async (req, 
 });
 
 // Login
-app.post('/api/auth/login', validateRequest(loginUserSchema), async (req, res, next) => {
+app.post('/api/auth/login', validateRequest(loginUserSchema), async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const { email, password } = req.body;
 
@@ -316,7 +316,7 @@ geminiBreaker.on('halfOpen', () => logger.info('Gemini circuit breaker is half-o
 geminiBreaker.on('fallback', () => logger.warn('Gemini API fallback triggered'));
 
 
-app.post('/api/llm/generate', authenticateToken, async (req, res, next) => {
+app.post('/api/llm/generate', authenticateToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     try {
         logger.info({ userId: (req as any).user.userId }, 'LLM request');
         const data = await geminiBreaker.fire(req.body);
@@ -334,7 +334,7 @@ app.use('/api/characters', authenticateToken);
 app.use('/api/dialogues', authenticateToken);
 
 
-app.get('/api/screenplays', pagination, async (req, res, next) => {
+app.get('/api/screenplays', pagination, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const { page, limit, offset } = (req as any).pagination;
     const userId = (req as any).user.userId;
@@ -349,7 +349,7 @@ app.get('/api/screenplays', pagination, async (req, res, next) => {
 });
 
 // Screenplay metadata
-app.get("/api/screenplays/:id", async (req, res, next) => {
+app.get("/api/screenplays/:id", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     const result = await pool.query("SELECT * FROM screenplays WHERE id=$1 AND owner_user_id=$2", [req.params.id, userId]);
@@ -360,7 +360,7 @@ app.get("/api/screenplays/:id", async (req, res, next) => {
 });
 
 // Screenplay content
-app.get("/api/screenplays/:id/content", async (req, res, next) => {
+app.get("/api/screenplays/:id/content", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const cacheKey = `screenplay:content:${req.params.id}`;
   try {
     const cachedData = await redisClient.get(cacheKey);
@@ -379,7 +379,7 @@ app.get("/api/screenplays/:id/content", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.put("/api/screenplays/:id/content", async (req, res, next) => {
+app.put("/api/screenplays/:id/content", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const cacheKey = `screenplay:content:${req.params.id}`;
   try {
     const { html } = req.body ?? { html: "" };
@@ -400,7 +400,7 @@ app.put("/api/screenplays/:id/content", async (req, res, next) => {
 });
 
 // Characters
-app.get("/api/screenplays/:id/characters", async (req, res, next) => {
+app.get("/api/screenplays/:id/characters", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const cacheKey = `screenplay:characters:${req.params.id}`;
   try {
     const cachedData = await redisClient.get(cacheKey);
@@ -419,7 +419,7 @@ app.get("/api/screenplays/:id/characters", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.post("/api/screenplays/:id/characters", async (req, res, next) => {
+app.post("/api/screenplays/:id/characters", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const cacheKey = `screenplay:characters:${req.params.id}`;
   try {
     const { name, role } = req.body ?? {};
@@ -437,7 +437,7 @@ app.post("/api/screenplays/:id/characters", async (req, res, next) => {
 });
 
 // Dialogues
-app.get("/api/characters/:id/dialogues", async (req, res, next) => {
+app.get("/api/characters/:id/dialogues", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     const result = await pool.query("SELECT * FROM dialogues WHERE character_id=$1 AND owner_user_id=$2", [req.params.id, userId]);
@@ -445,7 +445,7 @@ app.get("/api/characters/:id/dialogues", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.put("/api/dialogues/:dialogueId", async (req, res, next) => {
+app.put("/api/dialogues/:dialogueId", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const { text } = req.body ?? {};
     const userId = (req as any).user.userId;
@@ -455,7 +455,7 @@ app.put("/api/dialogues/:dialogueId", async (req, res, next) => {
 });
 
 // Sprints
-app.get("/api/users/:userId/sprints/active", async (req, res, next) => {
+app.get("/api/users/:userId/sprints/active", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -464,7 +464,7 @@ app.get("/api/users/:userId/sprints/active", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.post("/api/users/:userId/sprints", async (req, res, next) => {
+app.post("/api/users/:userId/sprints", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -476,7 +476,7 @@ app.post("/api/users/:userId/sprints", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
+app.put("/api/users/:userId/sprints/:sprintId", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -497,7 +497,7 @@ app.put("/api/users/:userId/sprints/:sprintId", async (req, res, next) => {
 });
 
 // Stash
-app.get("/api/users/:userId/stash", pagination, async (req, res, next) => {
+app.get("/api/users/:userId/stash", pagination, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -512,7 +512,7 @@ app.get("/api/users/:userId/stash", pagination, async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.post("/api/users/:userId/stash", async (req, res, next) => {
+app.post("/api/users/:userId/stash", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -526,7 +526,7 @@ app.post("/api/users/:userId/stash", async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
-app.delete("/api/users/:userId/stash/:itemId", async (req, res, next) => {
+app.delete("/api/users/:userId/stash/:itemId", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const userId = (req as any).user.userId;
     if (req.params.userId !== userId) return res.sendStatus(403);
@@ -536,10 +536,10 @@ app.delete("/api/users/:userId/stash/:itemId", async (req, res, next) => {
 });
 
 // Export PDF
-app.post("/api/export/pdf", authenticateToken, async (req: any, res, next) => {
+app.post("/api/export/pdf", authenticateToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     try {
         const { html, title = "screenplay" } = req.body ?? {};
-        const userId = req.user.userId;
+        const userId = (req as any).user.userId;
         logger.info({ userId }, 'PDF export requested');
 
         if (!html) {
@@ -567,14 +567,20 @@ let server: any;
 
 async function startServer() {
   try {
-    await redisClient.connect();
-    logger.info('Connected to Redis');
+    if (redisClient) {
+      await redisClient.connect();
+      logger.info('Connected to Redis');
+    } else {
+      logger.info('Redis disabled in test mode');
+    }
     server = app.listen(PORT, () => {
       logger.info(`API on http://localhost:${PORT}`);
     });
   } catch (err) {
-    logger.error(err, 'Failed to start server');
-    process.exit(1);
+    logger.warn({ err }, 'Redis connection failed, starting server without Redis');
+    server = app.listen(PORT, () => {
+      logger.info(`API on http://localhost:${PORT} (without Redis)`);
+    });
   }
 }
 
@@ -584,7 +590,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // Graceful shutdown
 const gracefulShutdown = (signal: string) => {
-    return (err?: Error) => {
+    return (err?: Error | unknown) => {
         if (err) logger.fatal(err, `Unhandled error, shutting down due to ${signal}`);
         else logger.info(`Received ${signal}, shutting down gracefully...`);
 
@@ -622,7 +628,7 @@ const gracefulShutdown = (signal: string) => {
 process.on('SIGTERM', gracefulShutdown('SIGTERM'));
 process.on('SIGINT', gracefulShutdown('SIGINT'));
 process.on('uncaughtException', gracefulShutdown('uncaughtException'));
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
     logger.error({ promise, reason }, 'Unhandled Rejection at Promise');
     gracefulShutdown('unhandledRejection')(new Error(String(reason)));
 });
