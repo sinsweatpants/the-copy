@@ -167,6 +167,29 @@ const authenticateToken = async (req: express.Request, res: express.Response, ne
   });
 };
 
+// Health Check Endpoint
+app.get('/api/health', async (req: express.Request, res: express.Response) => {
+  try {
+    // Check database connection
+    await pool.query('SELECT 1');
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      database: 'connected',
+      redis: redisClient ? 'connected' : 'disabled'
+    });
+  } catch (error) {
+    logger.error({ error }, 'Health check failed');
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: 'Database connection failed'
+    });
+  }
+});
 
 // --- Helpers
 function ok(res: express.Response, data: unknown) {
@@ -599,7 +622,7 @@ const gracefulShutdown = (signal: string) => {
                 logger.info('HTTP server closed.');
                 Promise.all([
                     pool.end(),
-                    redisClient.quit(),
+                    redisClient ? redisClient.quit() : Promise.resolve(),
                     pdfExportQueue.close(),
                 ]).then(() => {
                     logger.info('Closed all connections.');
@@ -612,7 +635,7 @@ const gracefulShutdown = (signal: string) => {
         } else {
              Promise.all([
                 pool.end(),
-                redisClient.quit(),
+                redisClient ? redisClient.quit() : Promise.resolve(),
                 pdfExportQueue.close(),
             ]).then(() => {
                 logger.info('Closed all connections.');

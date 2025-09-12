@@ -1,16 +1,4 @@
--- Create function to get current user ID from session
-CREATE OR REPLACE FUNCTION current_user_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT COALESCE(
-    nullif(current_setting('app.current_user_id', true), '')::uuid,
-    '00000000-0000-0000-0000-000000000000'::uuid
-  );
-$$;
-
--- Drop existing policies that use auth.uid()
+-- Drop existing policies if they exist
 DROP POLICY IF EXISTS screenplays_owner_policy ON screenplays;
 DROP POLICY IF EXISTS characters_owner_policy ON characters;
 DROP POLICY IF EXISTS dialogues_owner_policy ON dialogues;
