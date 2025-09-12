@@ -12,6 +12,7 @@
     "lint": "echo 'frontend lint'"
   },
   "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
     "@tanstack/react-query": "^5.51.21",
     "@tiptap/extension-placeholder": "^2.3.2",
     "@tiptap/react": "^2.3.2",
