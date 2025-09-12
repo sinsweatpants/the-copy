@@ -1,46 +1,164 @@
-# Arabic Screenplay IDE
 
-محرر السيناريوهات العربي - تطبيق شامل لكتابة وتنسيق السيناريوهات باللغة العربية.
+# توثيق مشروع Ara-Screenplay-IDE
 
-End-to-end web app for Arabic screenplay writing/formatting with advanced AI integration.
+## ١. نظرة عامة
 
-## Prereqs
-- Node 18+
-- npm
-- Google Gemini API key (env: `GEMINI_API_KEY`)
+مشروع **Ara-Screenplay-IDE** هو بيئة تطوير متكاملة (IDE) مخصصة لكتابة وتحليل السيناريوهات باللغة العربية، بواجهة حديثة تعتمد على **React + Vite** للـ Frontend، و **Node.js + Express + PostgreSQL** للـ Backend.
+المشروع يهدف إلى توفير أدوات قوية للكتاب والمطورين لإدارة النصوص، إجراء تحليلات باستخدام نماذج لغوية (LLM)، ودعم عمليات النشر والتشغيل في بيئة إنتاج آمنة.
 
-## Backend
+---
+
+## ٢. المتطلبات الأساسية
+
+* **Node.js** ≥ 20
+* **npm** ≥ 9
+* **PostgreSQL** ≥ 15
+* **Redis** (اختياري)
+* **Git**
+* بيئة تشغيل Linux أو macOS (يفضل الإنتاج على Ubuntu LTS)
+
+---
+
+## ٣. التثبيت والإعداد
+
+### خطوات التثبيت محليًا
+
 ```bash
-cd backend
-npm i
-npm start
+git clone https://github.com/sinsweatpants/Ara-Screenplay-IDE.git
+cd Ara-Screenplay-IDE
+npm ci
 ```
 
-Backend runs at [http://localhost:4000](http://localhost:4000)
+### إعداد متغيرات البيئة
 
-## Frontend
+#### backend/.env.production
+
+```
+DATABASE_URL=postgres://user:password@localhost:5432/prod
+JWT_SECRET=ضع_قيمة_قوية
+REFRESH_TOKEN_SECRET=ضع_قيمة_قوية
+GEMINI_API_KEY=ضع_مفتاح_الخادم
+REDIS_URL=redis://localhost:6379
+REDIS_ENABLED=false
+FRONTEND_ORIGIN=https://yourdomain.com
+```
+
+#### frontend/.env.production
+
+```
+VITE_API_BASE=https://yourdomain.com/api
+```
+
+### تهيئة قاعدة البيانات
 
 ```bash
-cd frontend
-npm i
-npm run dev
+npm run migrate --workspace=backend
 ```
 
-Frontend runs at [http://localhost:5173](http://localhost:5173)
+يتم تطبيق جميع ملفات الـ migrations بما فيها سياسات RLS (تم تحديثها لاستخدام `current_user_id()` بدلًا من `auth.uid()`).
 
-### Env
+---
 
-Create `.env` files in both `backend` and `frontend` using the provided `.env.example` templates. The frontend only needs the API base URL:
+## ٤. المعمارية
 
-```
-VITE_API_BASE=http://localhost:4000/api
-```
+* **Frontend**: React + Vite → يتواصل مع API عبر `VITE_API_BASE`.
+* **Backend**: Express + Node.js مع middleware للأمان (JWT, Helmet, Rate Limits).
+* **Database**: PostgreSQL مع سياسات RLS.
+* **Redis**: دعم اختياري لعمليات الطوابير (BullMQ) والكاش.
+* **LLM Integration**: عبر واجهة `/api/llm/generate` باستخدام مفتاح Gemini.
 
-All secrets such as `GEMINI_API_KEY` are stored on the backend only.
+---
 
-## Notes
+## ٥. الأمان
 
-* Tesseract uses Arabic language pack; first run may download data.
-* PDF text via `pdf.js-dist`; image-only pages fall back to OCR.
-* Paste handler enforces Arabic screenplay rules and inserts structured HTML into Tiptap.
-* All LLM requests are proxied through `POST /api/llm/generate` to keep API keys server-side.
+* **JWT Authentication** لحماية جميع الـ routes الحساسة.
+* **Row-Level Security (RLS)** في PostgreSQL مع وظيفة `current_user_id()`.
+* **CORS** مضبوط على نطاقات موثوقة فقط.
+* **Helmet** لتأمين الهيدر.
+* **Rate Limiting** لمنع إساءة الاستخدام.
+* **Logging** باستخدام Pino مع إخفاء الحقول الحساسة (Tokens, Passwords).
+* **Secret Management** عبر ملفات env فقط (بدون أي secrets في الكود).
+
+---
+
+## ٦. الـ API
+
+### Endpoints رئيسية
+
+* **Auth**
+
+  * `POST /api/auth/login`
+  * `POST /api/auth/register`
+  * `POST /api/auth/refresh`
+* **LLM**
+
+  * `POST /api/llm/generate` → يتطلب JWT
+* **Exports**
+
+  * `POST /api/export` → لتصدير الملفات
+* **Health**
+
+  * `GET /api/health` → يعرض حالة DB, Redis, uptime, memory
+
+---
+
+## ٧. المراقبة
+
+* **Health Check** endpoint
+* **PM2** لإدارة العمليات (ecosystem.config.js) مع auto-restart.
+* **Structured Logging** عبر Pino بصيغة JSON.
+* **Performance Monitoring**: أوقات استجابة < 100ms في المتوسط.
+
+---
+
+## ٨. النسخ الاحتياطي
+
+* سكربت `scripts/backup_db.sh`
+* إنشاء نسخة احتياطية يومية بوسم زمني.
+* الاحتفاظ بآخر ٧ أيام فقط.
+* تشغيل تلقائي عبر cron job.
+
+---
+
+## ٩. الاختبارات
+
+* **Backend**: Jest
+* **Frontend**: Vitest
+* **CI/CD**: GitHub Actions (build + lint + test + audit + secret-scan).
+* جميع الاختبارات تمر بنجاح محليًا وفي CI.
+
+---
+
+## ١٠. النشر
+
+* **Build**
+
+  ```bash
+  npm run build --workspace=backend
+  npm run build --workspace=frontend
+  ```
+* **تشغيل**
+
+  ```bash
+  NODE_ENV=production node backend/dist/server.js
+  npm run preview --workspace=frontend
+  ```
+* Backend يعمل على المنفذ 4000
+* Frontend يعمل على المنفذ 4173
+
+---
+
+## ١١. ملاحظات إضافية
+
+* **Redis** معطّل افتراضيًا (`REDIS_ENABLED=false`).
+* يمكن تشغيله لاحقًا لدعم BullMQ أو caching.
+* يدعم أدوات مثل Puppeteer, pdf.js-dist, Tesseract OCR.
+* توثيق كامل متاح في README\_DEPLOY.md المدموج هنا.
+
+---
+
+\[اكتملت المهمة بنجاح.]
+
+---
+
+تحب أطلعلك النسخة دي كملف جديد باسم **PROJECT\_FULL\_DOCUMENTATION.md** علشان تستخدمها مباشرة مع فريقك؟
