@@ -1,66 +1,76 @@
-import { IClassifier, ScreenplayFormatId } from "@/types/screenplay";
+export type ScreenplayFormatId = 'basmala' | 'scene-header-1' | 'scene-header-2' | 'scene-header-3' | 'action' | 'character' | 'parenthetical' | 'dialogue' | 'transition';
 
-/**
- * Rule-based classifier for Arabic screenplay lines.
- * Heuristics keep context via previous format; tuned for paste-handling.
- */
-export class ScreenplayClassifier implements IClassifier {
+export class ScreenplayClassifier {
+    sceneTimeKeywords: string[] = ['ليل', 'نهار', 'صباح', 'مساء', 'فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء', 'day', 'night', 'morning', 'evening'];
+    sceneLocationKeywords: string[] = ['داخلي', 'خارجي', 'فوتو', 'مونتاج', 'int.', 'ext.'];
+    sceneKeywords: string[] = [...this.sceneTimeKeywords, ...this.sceneLocationKeywords];
+    transitionKeywords: string[] = ['قطع', 'اختفاء', 'تحول', 'انتقال', 'cut to', 'fade to', 'dissolve to'];
+    commonVerbs: string[] = ['يقف', 'تقف', 'يجلس', 'تجلس', 'يدخل', 'تدخل', 'يخرج', 'تخرج', 'ينظر', 'تنظر', 'يقول', 'تقول', 'يمشي', 'تمشي', 'تركض', 'يركض', 'يكتب', 'تكتب', 'يقرأ', 'تقرأ'];
+    locationNames: string[] = ['مسجد', 'جامع', 'كنيسة', 'مدرسة', 'مستشفى', 'شارع', 'ميدان', 'حديقة', 'مقهى', 'مطعم', 'محل', 'بيت', 'منزل', 'فيلا', 'عمارة', 'برج', 'القاهرة', 'الإسكندرية', 'الجيزة', 'المنصورة', 'أسوان', 'الأقصر', 'طنطا', 'المنيا'];
 
-  private readonly re = {
-    basmala: /^\s*بسم\s+الله\s+الرحمن\s+الرحيم\s*$/u,
-    sceneHeader: /^\s*(مشهد\s*\d+)\s+(.+)\s*$/u, // e.g., "مشهد 1 ليل - داخلي"
-    locationOnly: /^\s*[^\-]+$/u, // loose match for location line if centered next
-    character: /^(?:[\p{L}\s]{2,30})$/u, // short, letters/spaces only
-    parenthetical: /^\s*[\(（][^)）]+[\)）]\s*$/u,
-    transition: /^\s*(قطع\s+إلى|ذوبان\s+إلى|محو\s+تدريجي)\s*$/u,
-    blank: /^\s*$/
-  };
+    classifyLine(line: string, previousFormat: ScreenplayFormatId): ScreenplayFormatId | 'scene-header-1-split' {
+        const trimmedLine = line.trim();
+        const wordCount = trimmedLine.split(/\s+/).filter(Boolean).length;
+        const firstWord = trimmedLine.split(/[\s-]/)[0];
 
-  classifyLine(line: string, previous: ScreenplayFormatId | null): ScreenplayFormatId {
-    const s = line.trim();
-
-    if (this.re.blank.test(s)) return 'unknown';
-    if (this.re.basmala.test(s)) return 'basmala';
-
-    // Scene header (line 1) e.g., "مشهد 1 ليل - داخلي"
-    if (this.re.sceneHeader.test(s)) return 'scene-header-1';
-
-    // If previous line was header line1, and this looks like location => location
-    if (previous === 'scene-header-1' && this.re.locationOnly.test(s)) {
-      return 'scene-header-location';
+        if (trimmedLine.match(/^بسم الله الرحمن الرحيم/i)) {
+            return 'basmala';
+        }
+        if (this.transitionKeywords.some(keyword => trimmedLine.toLowerCase().startsWith(keyword))) {
+            return 'transition';
+        }
+        if (trimmedLine.match(/^(مشهد\s*\d+|scene\s*\d+)/i)) {
+            const match = trimmedLine.match(/^(مشهد\s*\d+)\s+(.+)$/i);
+            if (match && this.sceneKeywords.some(kw => match[2].toLowerCase().includes(kw))) {
+                return 'scene-header-1';
+            }
+            return 'scene-header-1';
+        }
+        if (previousFormat === 'scene-header-1' || previousFormat === 'scene-header-2') {
+            if (wordCount <= 5 && (trimmedLine.endsWith(':') || trimmedLine.endsWith('：'))) {
+                 return 'scene-header-3';
+            }
+            if (this.commonVerbs.includes(firstWord)){
+                return 'scene-header-3';
+            }
+            if (wordCount <= 7 && !trimmedLine.match(/[:：]/)) {
+                 return 'scene-header-3';
+            }
+        }
+        if (trimmedLine.startsWith('(') && trimmedLine.endsWith(')')) {
+            if (previousFormat === 'character' || previousFormat === 'dialogue') {
+                return 'parenthetical';
+            }
+            return 'action';
+        }
+        if (trimmedLine.endsWith(':') || trimmedLine.endsWith('：')) {
+            return 'character';
+        }
+        if (trimmedLine.match(/^[A-Z\s]+$/) && wordCount <= 4) {
+            return 'character';
+        }
+        if (trimmedLine.match(/^(الرجل|الشاب|المرأة|الفتاة|الطفل)\s+\d+/i)) {
+            return 'character';
+        }
+        if (wordCount <= 4 && !this.commonVerbs.includes(firstWord) && !this.locationNames.some(loc => trimmedLine.includes(loc))) {
+            if(previousFormat === 'action' || previousFormat === 'dialogue' || previousFormat === 'transition') {
+                return 'character';
+            }
+        }
+        if (previousFormat === 'character' || previousFormat === 'parenthetical') {
+            return 'dialogue';
+        }
+        return 'action';
     }
 
-    // Parenthetical takes priority before dialogue
-    if (this.re.parenthetical.test(s)) {
-      return previous === 'character' || previous === 'dialogue' ? 'parenthetical' : 'action';
+    splitSceneHeader(line: string): { sceneNumber: string; sceneInfo: string } | null {
+        const match = line.match(/^(مشهد\s*\d+)\s+(.+)$/i);
+        if (match) {
+            return {
+                sceneNumber: match[1].trim(),
+                sceneInfo: match[2].trim()
+            };
+        }
+        return null;
     }
-
-    // Character heuristic: short all-letters token, and the next line likely dialogue (handled by look-ahead externally)
-    if (this.re.character.test(s) && this.isLikelyCharacter(s)) {
-      return 'character';
-    }
-
-    if (this.re.transition.test(s)) return 'transition';
-
-    // If previous was character or parenthetical, default to dialogue
-    if (previous === 'character' || previous === 'parenthetical' || previous === 'dialogue') {
-      return 'dialogue';
-    }
-
-    return 'action';
-  }
-
-  parseSceneHeaderLine(line: string): { sceneNumber: string; sceneInfo: string } | null {
-    const m = line.trim().match(this.re.sceneHeader);
-    if (!m) return null;
-    return { sceneNumber: m[1].trim(), sceneInfo: m[2].trim() };
-  }
-
-  private isLikelyCharacter(s: string): boolean {
-    // Arabic names are often 2–3 words, no punctuation. Reject if contains digits or hyphens.
-    if (/[0-9\-:،.]/u.test(s)) return false;
-    // Uppercase heuristic doesn't apply; use length/words
-    const words = s.split(/\s+/).filter(Boolean);
-    return words.length <= 4 && s.length <= 30;
-  }
 }
