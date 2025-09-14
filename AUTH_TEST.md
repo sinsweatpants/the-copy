@@ -3,4 +3,4 @@
 This file was created to test GitHub authentication with account: sinsweatpants
 
 Date: 2025-09-12
-Repository: Ara-Screenplay-IDE
+Repository: the-copy

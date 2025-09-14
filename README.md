@@ -1,9 +1,8 @@
-
-# توثيق مشروع Ara-Screenplay-IDE
+# توثيق مشروع the-copy
 
 ## ١. نظرة عامة
 
-مشروع **Ara-Screenplay-IDE** هو بيئة تطوير متكاملة (IDE) مخصصة لكتابة وتحليل السيناريوهات باللغة العربية، بواجهة حديثة تعتمد على **React + Vite** للـ Frontend، و **Node.js + Express + PostgreSQL** للـ Backend.
+مشروع **the-copy** هو بيئة تطوير متكاملة (IDE) مخصصة لكتابة وتحليل السيناريوهات باللغة العربية، بواجهة حديثة تعتمد على **React + Vite** للـ Frontend، و **Node.js + Express + PostgreSQL** للـ Backend.
 المشروع يهدف إلى توفير أدوات قوية للكتاب والمطورين لإدارة النصوص، إجراء تحليلات باستخدام نماذج لغوية (LLM)، ودعم عمليات النشر والتشغيل في بيئة إنتاج آمنة.
 
 ---
@@ -24,8 +23,8 @@
 ### خطوات التثبيت محليًا
 
 ```bash
-git clone https://github.com/sinsweatpants/Ara-Screenplay-IDE.git
-cd Ara-Screenplay-IDE
+git clone https://github.com/sinsweatpants/the-copy.git
+cd the-copy
 npm ci
 ```
 
