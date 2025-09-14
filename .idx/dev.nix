@@ -3,6 +3,7 @@
   packages = [
     pkgs.nodejs_20
     pkgs.postgresql
+
   ];
   idx.extensions = [
     "svelte.svelte-vscode"
@@ -20,6 +21,7 @@
           "$PORT"
           "--host"
           "0.0.0.0"
+          
         ];
         manager = "web";
       };
