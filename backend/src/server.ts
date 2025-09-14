@@ -1,3 +1,4 @@
+// filepath: backend/src/server.ts
 import "./config/load-env.js";
 
 import express from "express";
@@ -38,14 +39,27 @@ app.get("/health", (_req, res) =>
   res.json({ ok: true, env: env.NODE_ENV, port: env.PORT })
 );
 
-// اتصال PostgreSQL (Pool)
-const pg = new Pool({ connectionString: env.DATABASE_URL });
+// اتصال PostgreSQL (Pool) لو مش معطّل
+if (!env.DISABLE_DB) {
+  if (env.DATABASE_URL) {
+    const pg = new Pool({ connectionString: env.DATABASE_URL });
+    pg.connect()
+      .then(() =>
+        console.log(JSON.stringify({ level: 30, msg: "Postgres connected" }))
+      )
+      .catch((err) =>
+        console.error(
+          JSON.stringify({ level: 50, msg: "[postgres] error", err })
+        )
+      );
+  }
+} else {
+  console.log(JSON.stringify({ level: 30, msg: "Database disabled" }));
+}
 
-// تعطيل Redis لو مفيش URL
-if (!env.REDIS_URL) {
-  console.log(
-    JSON.stringify({ level: 30, msg: "Redis disabled (no REDIS_URL set)" })
-  );
+// تعطيل Redis لو مفيش URL أو معطّل
+if (env.DISABLE_REDIS || !env.REDIS_URL) {
+  console.log(JSON.stringify({ level: 30, msg: "Redis disabled" }));
 }
 
 // تقديم واجهة React إن وُجد build
@@ -80,12 +94,12 @@ try {
   );
 }
 
-// تشغيل الخادم
-app.listen(env.PORT, () => {
+// تشغيل الخادم على 0.0.0.0 (يسمع من أي مكان)
+app.listen(env.PORT, "0.0.0.0", () => {
   console.log(
     JSON.stringify({
       level: 30,
-      msg: `API on http://localhost:${env.PORT}`,
+      msg: `API on http://0.0.0.0:${env.PORT}`,
     })
   );
 });

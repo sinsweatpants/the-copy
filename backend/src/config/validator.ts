@@ -1,45 +1,50 @@
-// filepath: backend/src/config/validator.ts
 import { z } from "zod";
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().default(4000),
+// تعريف الـ schema الأساسي
+const baseSchema = z.object({
+  NODE_ENV: z.string().default("development"),
+  PORT: z.string().default("4000"),
 
-  DISABLE_DB: z.string().optional(),
-  DISABLE_REDIS: z.string().optional(),
-
+  // قواعد البيانات
   DATABASE_URL: z.string().optional(),
+  DISABLE_DB: z.string().transform((v) => v === "true").optional(),
+
+  // Redis
   REDIS_URL: z.string().optional(),
+  DISABLE_REDIS: z.string().transform((v) => v === "true").optional(),
 
-  JWT_SECRET: z.string().min(1, "JWT_SECRET مفقود"),
-  REFRESH_TOKEN_SECRET: z.string().min(1, "REFRESH_TOKEN_SECRET مفقود"),
-  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY مفقود"),
+  // JWT
+  JWT_SECRET: z.string().min(20, "JWT_SECRET لازم يبقى سترنج طويل ومعقد"),
+  REFRESH_TOKEN_SECRET: z
+    .string()
+    .min(20, "REFRESH_TOKEN_SECRET لازم يبقى سترنج طويل ومعقد"),
 
-  FRONTEND_ORIGIN: z.string().min(1, "FRONTEND_ORIGIN مفقود"),
+  // Gemini
+  GEMINI_API_KEY: z.string().min(10, "مفتاح GEMINI_API_KEY مفقود"),
+
+  // Frontend
+  FRONTEND_ORIGIN: z.string().url(),
 });
 
-export const env = (() => {
-  const parsed = envSchema.safeParse(process.env);
-  if (!parsed.success) {
-    const errors = parsed.error.flatten().fieldErrors;
-    console.error(
-      JSON.stringify({ level: 50, errors, msg: "Invalid environment variables" })
-    );
-    throw new Error("Invalid environment variables");
-  }
+// معالجة الـ flags
+const parsed = baseSchema.safeParse(process.env);
 
-  const data = parsed.data;
+if (!parsed.success) {
+  console.error(
+    JSON.stringify({ level: 50, errors: parsed.error.format(), msg: "Invalid environment variables" })
+  );
+  throw new Error("Invalid environment variables");
+}
 
-  // تحقق منطقي: لازم DATABASE_URL لو DISABLE_DB مش موجود
-  if (!data.DISABLE_DB && !data.DATABASE_URL) {
-    throw new Error("DATABASE_URL مفقود (ولم يتم تعطيل قاعدة البيانات)");
-  }
+// منطق تعطيل قاعدة البيانات و Redis
+const env = parsed.data;
 
-  // تحقق منطقي: لازم REDIS_URL لو DISABLE_REDIS مش موجود
-  if (!data.DISABLE_REDIS && !data.REDIS_URL) {
-    throw new Error("REDIS_URL مفقود (ولم يتم تعطيل Redis)");
-  }
+if (!env.DISABLE_DB && !env.DATABASE_URL) {
+  throw new Error("DATABASE_URL مفقود ولم يتم تعطيل قاعدة البيانات");
+}
 
-  return data;
-})();
-export type Env = z.infer<typeof envSchema>;
+if (!env.DISABLE_REDIS && !env.REDIS_URL) {
+  throw new Error("REDIS_URL مفقود ولم يتم تعطيل Redis");
+}
+
+export { env };
