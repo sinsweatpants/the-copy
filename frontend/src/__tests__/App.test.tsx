@@ -1,22 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../contexts/AuthContext';
 
 describe('App', () => {
-  it('renders the main application and the rich text editor', () => {
-    window.history.pushState({}, '', '/?screenplayId=test');
+  it('opens the editor after clicking the button', () => {
     render(
       <AuthProvider>
         <App />
       </AuthProvider>
     );
 
-    // Check if the main container is rendered
     const mainElement = screen.getByRole('main');
     expect(mainElement).toBeInTheDocument();
 
-    // Check for the editor specifically by its test-id
+    const openBtn = screen.getByRole('button', { name: 'افتح محرر السيناريو' });
+    fireEvent.click(openBtn);
     const editorElement = screen.getByTestId('rich-text-editor');
     expect(editorElement).toBeInTheDocument();
   });
