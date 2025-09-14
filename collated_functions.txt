@@ -1,0 +1,2693 @@
+// Source: src/hooks/use-toast.ts
+const addToRemoveQueue = (toastId: string) => {
+  if (toastTimeouts.has(toastId)) {
+    return
+  }
+
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId)
+    dispatch({
+      type: "REMOVE_TOAST",
+      toastId: toastId,
+    })
+  }, TOAST_REMOVE_DELAY)
+
+  toastTimeouts.set(toastId, timeout)
+}
+
+
+
+// Source: download (17)/src/components/ai-feature-section.tsx
+export function AiFeatureSection() {
+  const [correctedScript, setCorrectedScript] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      script: '',
+    },
+  });
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    setCorrectedScript('');
+
+    try {
+      const result = await fixGrammarAndStyle({ script: values.script });
+      if (result.correctedScript) {
+        setCorrectedScript(result.correctedScript);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'خطأ',
+          description: 'لم يتمكن الذكاء الاصطناعي من تصحيح النص. حاول مرة أخرى بنص مختلف.',
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: 'destructive',
+        title: 'خطأ في المعالجة',
+        description: 'حدث خطأ أثناء معالجة طلبك. الرجاء المحاولة مرة أخرى.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <section id="ai-checker" className="w-full py-12 md:py-24 lg:py-32 bg-secondary/20">
+      <div className="container px-4 md:px-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="space-y-2">
+            <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+              مدعوم بالذكاء الاصطناعي
+            </div>
+            <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl font-headline text-primary">
+              مدقق الأخطاء الآلي
+            </h2>
+            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+             ماسح ضوئي تلقائي يبحث عن الأخطاء الشكلية والتنسيقية. يفحص المسافات الزائدة، الأسطر الفارغة، وعدم اتساق أسماء الشخصيات ثم يقدم تقريراً فورياً.
+            </p>
+          </div>
+        </div>
+        <div className="mx-auto mt-12 max-w-4xl">
+          <Card className="bg-card/80 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  <FormField
+                    control={form.control}
+                    name="script"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-lg">النص الأصلي</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="اكتب أو الصق النص هنا..."
+                            className="min-h-[150px] resize-y bg-background/50"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={isLoading} className="w-full">
+                    {isLoading ? (
+                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="ml-2 h-4 w-4" />
+                    )}
+                    {isLoading ? 'جاري المعالجة...' : 'صحح النص'}
+                  </Button>
+                </form>
+              </Form>
+
+              {(isLoading || correctedScript) && <Separator className="my-8" />}
+
+              {isLoading && (
+                <div className="space-y-4">
+                  <p className="text-center text-lg font-medium">
+                    يقوم الذكاء الاصطناعي بتحليل النص...
+                  </p>
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full bg-muted/50" />
+                    <Skeleton className="h-4 w-5/6 bg-muted/50" />
+                    <Skeleton className="h-4 w-3/4 bg-muted/50" />
+                  </div>
+                </div>
+              )}
+
+              {correctedScript && !isLoading && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">النص المصحح:</h3>
+                  <div className="whitespace-pre-wrap rounded-md bg-background/50 p-4 border">
+                    {correctedScript}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const applyFormatToCurrentLine = (formatType, styleOverride = {}) => {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      let el = sel.getRangeAt(0).commonAncestorContainer;
+      while (el && el.nodeName !== 'DIV') el = el.parentNode;
+  
+      if (!el || el.nodeName !== 'DIV') {
+        const range = sel.getRangeAt(0);
+        const div = document.createElement('div');
+        try {
+          range.surroundContents(div);
+          el = div;
+        } catch {
+          const txt = range.toString();
+          range.deleteContents();
+          div.textContent = txt || ' ';
+          range.insertNode(div);
+          el = div;
+        }
+      }
+  
+      if (el) {
+        el.className = formatType;
+        Object.assign(el.style, getFormatStyles(formatType), styleOverride);
+        setCurrentFormat(formatType);
+        updateContent();
+      }
+    };
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const applyFormatToCurrentLine = (formatType: ScreenplayFormatId) => {
+        if (!editorRef.current) return;
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        let currentElement = range.commonAncestorContainer;
+        while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) currentElement = currentElement.parentNode;
+        while (currentElement && (currentElement as HTMLElement).tagName !== 'DIV' && currentElement !== editorRef.current) currentElement = currentElement.parentNode;
+        if (!currentElement || currentElement === editorRef.current) {
+            const newDiv = document.createElement('div');
+            newDiv.innerHTML = '<br>';
+            currentElement = newDiv;
+            editorRef.current.appendChild(newDiv);
+        }
+        const formatStyles = getFormatStyles(formatType);
+        (currentElement as HTMLElement).className = formatType;
+        Object.assign((currentElement as HTMLElement).style, formatStyles);
+        setCurrentFormat(formatType);
+        const newRange = document.createRange();
+        newRange.selectNodeContents(currentElement);
+        newRange.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+        updateContent();
+    };
+
+// Source: download (11)/src/app/page.tsx
+export default function ArabicQuillPage() {
+  const [text, setText] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  return (
+    <div className="flex flex-col min-h-screen bg-background text-foreground font-body">
+      <Header isAuthenticated={isAuthenticated} onAuthChange={setIsAuthenticated} />
+      <main className="flex-1 container mx-auto p-4 md:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            <Card className="shadow-md">
+              <CardContent className="p-2 md:p-4">
+                <EditorToolbar />
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="...اكتب نصك العربي هنا"
+                  className="w-full h-[50vh] min-h-[400px] text-lg leading-relaxed bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-4 resize-none"
+                  dir="rtl"
+                />
+              </CardContent>
+            </Card>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button disabled={!isAuthenticated} className="w-full">
+                <FileUp className="mr-2 h-4 w-4" />
+                Load from Google Docs
+              </Button>
+              <Button disabled={!isAuthenticated} className="w-full">
+                <FileDown className="mr-2 h-4 w-4" />
+                Save to Google Docs
+              </Button>
+            </div>
+          </div>
+          <div className="lg:col-span-1">
+            <SentimentAnalyzer text={text} />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+ function auditWithGemini(batch) {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) throw new Error('Missing Gemini API key');
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const prompt = buildAuditPrompt(batch);
+      try {
+        const resp = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: 'application/json' }
+          })
+        });
+        if (!resp.ok) {
+          const errTxt = await resp.text();
+          console.error('Gemini API Error:', resp.status, errTxt);
+          return [];
+        }
+        const data = await resp.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+        let corrections = JSON.parse(rawText);
+        if (!Array.isArray(corrections)) return [];
+        const allowed = new Set(screenplayFormats.map(f => f.id));
+        return corrections.filter(c => typeof c?.index === 'number' && allowed.has(c?.suggestedClass));
+      } catch (err) {
+        console.error('Gemini audit exception:', err);
+        return [];
+      }
+    }
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+ function buildAuditPrompt(lines) {
+    const allowedClasses = JSON.stringify([
+      'character', 'dialogue', 'parenthetical', 'action',
+      'scene-header-1', 'scene-header-2', 'scene-header-3', 'transition'
+    ]);
+    return `### Persona
+  You are an expert AI system specializing in the structural analysis and classification of Arabic screenplay text. Your expertise lies in understanding the nuanced conventions of screenplay formatting, including scene headers, character names, dialogue, parentheticals, actions, and transitions. You operate with surgical precision and high confidence.
+  
+  ### Primary Objective
+  Your primary objective is to audit a list of pre-classified screenplay lines, identify definite misclassifications made by a less sophisticated local classifier, and provide corrections in a structured JSON format.
+  
+  ### Context
+  You will be given a JSON array named \`lines\`. Each object in this array represents a single line from a screenplay and contains:
+  - \`index\`: The original line number (integer).
+  - \`raw\`: The raw Arabic text of the line.
+  - \`cls\`: The initial classification assigned by the local classifier.
+  
+  The set of valid classifications is: ${allowedClasses}.
+  
+  ### Core Task
+  Your task is to analyze the provided \`lines\` array and return a JSON array of correction objects. Each correction object must identify a line that was definitively misclassified.
+  
+  ### Step-by-Step Instructions
+  1. Iterate through the \`lines\` array, considering each line in the context of its preceding and succeeding lines.
+  2. Apply the provided \`High-Confidence Heuristics\` and your internal knowledge of screenplay structure to detect classification errors.
+  3. For each error you identify with high confidence, create a JSON object with the following keys:
+     * \`index\`: The \`index\` of the misclassified line.
+     * \`suggestedClass\`: The correct class from the allowed list.
+     * \`reason\`: A brief, concise justification for the change (in English or Arabic).
+  4. Compile all correction objects into a single JSON array.
+  5. If you find no definite errors, you MUST return an empty array \`[]\`.
+  
+  ### High-Confidence Heuristics (Arabic Screenplays)
+  1. **Dialogue after Character:** If a line is classified as \`action\` but directly follows a \`character\` line, contains three or more words, and reads like spoken Arabic, it is almost certainly \`dialogue\`.
+  2. **Inline Character Names:** If a line contains the pattern \`NAME :\` and is not part of a scene header, the text before the colon should be \`character\` and after it \`dialogue\`.
+  3. **Multi-Part Scene Headers:** If a line classified as \`action\` appears directly after a \`scene-header-1\` and contains multiple location names separated by dashes, it should be \`scene-header-3\`.
+  4. **Emotional Cues vs. Characters:** A single emotional/state word misclassified as \`character\` should be \`action\` or \`parenthetical\`.
+  5. **Principle of Caution:** Only flag unambiguous errors.
+  
+  ### Critical Rules
+  1. Output MUST be a valid JSON array ONLY.
+  2. No prose outside JSON.
+  3. Empty array when no corrections.
+  4. suggestedClass must be in the allowed set.
+  5. Reasons must be concise.
+  
+  ### DATA FOR ANALYSIS
+  ${JSON.stringify(lines, null, 2)}
+  `;
+  }
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const calculateStats = () => {
+        if (!editorRef.current) return;
+        const content = editorRef.current.textContent || '';
+        const characters = content.length;
+        const words = content.trim().split(/\s+/).filter(word => word.length > 0).length;
+        const scenes = editorRef.current.querySelectorAll('.scene-header-1').length;
+        const pages = Math.max(1, Math.ceil(editorRef.current.scrollHeight / A4_PAGE_HEIGHT_PX));
+        setDocumentStats({ characters, words, pages, scenes });
+        setPageCount(pages);
+    };
+
+// Source: src/components/ui/calendar.tsx
+
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  ...props
+}: CalendarProps) {
+  return (
+    <DayPicker
+      showOutsideDays={showOutsideDays}
+      className={cn("p-3", className)}
+      classNames={{
+        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        month: "space-y-4",
+        caption: "flex justify-center pt-1 relative items-center",
+        caption_label: "text-sm font-medium",
+        nav: "space-x-1 flex items-center",
+        nav_button: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+        ),
+        nav_button_previous: "absolute left-1",
+        nav_button_next: "absolute right-1",
+        table: "w-full border-collapse space-y-1",
+        head_row: "flex",
+        head_cell:
+          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
+        row: "flex w-full mt-2",
+        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+        day: cn(
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+        ),
+        day_range_end: "day-range-end",
+        day_selected:
+          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+        day_today: "bg-accent text-accent-foreground",
+        day_outside:
+          "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground",
+        day_disabled: "text-muted-foreground opacity-50",
+        day_range_middle:
+          "aria-selected:bg-accent aria-selected:text-accent-foreground",
+        day_hidden: "invisible",
+        ...classNames,
+      }}
+      components={{
+        IconLeft: ({ className, ...props }) => (
+          <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
+        ),
+        IconRight: ({ className, ...props }) => (
+          <ChevronRight className={cn("h-4 w-4", className)} {...props} />
+        ),
+      }}
+      {...props}
+    />
+  )
+}
+
+// Source: src/components/ui/chart.tsx
+const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
+  const colorConfig = Object.entries(config).filter(
+    ([, config]) => config.theme || config.color
+  )
+
+  if (!colorConfig.length) {
+    return null
+  }
+
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: Object.entries(THEMES)
+          .map(
+            ([theme, prefix]) => `
+${prefix} [data-chart=${id}] {
+${colorConfig
+  .map(([key, itemConfig]) => {
+    const color =
+      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+      itemConfig.color
+    return color ? `  --color-${key}: ${color};` : null
+  })
+  .join("\n")}
+}
+`
+          )
+          .join("\n"),
+      }}
+    />
+  )
+}
+
+
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const classifyLineInstantly = (text, previousFormat) => {
+      if (!text || text.length < 2) return 'action';
+      const trimmed = text.trim();
+      if (/^[^\s:]{1,15}:/.test(trimmed)) return 'character';
+      if (/^(مشهد|scene|الفصل|chapter)/i.test(trimmed)) return 'scene-header-1';
+      if (/^(داخلي|خارجي|ليل|نهار|صباح|مساء|interior|exterior)/i.test(trimmed)) return 'scene-header-2';
+      if (/^(البيت|المدرسة|المكتب|الشارع|المستشفى|الغرفة)/i.test(trimmed)) return 'scene-header-3';
+      if (/^(قطع|اختفاء|انتقال|cut|fade)/i.test(trimmed) && trimmed.length < 20) return 'transition';
+      if (/^(أنا|أنت|نعم|لا|ربما|آه|أوه)/.test(trimmed)) return 'dialogue';
+      if (/[؟!]$/.test(trimmed)) return 'dialogue';
+      if (/^(يدخل|يخرج|يجلس|يقوم|يمشي|نرى|نشاهد)/.test(trimmed)) return 'action';
+      if (previousFormat === 'character') return 'dialogue';
+      if (previousFormat === 'dialogue' && /^(هو|هي|الرجل|المرأة)/.test(trimmed)) return 'action';
+      return 'action';
+    };
+
+// Source: download (15)/src/components/Toolbar.tsx
+const closeAllMenus = () => {
+        setShowFileMenu(false);
+        setShowEditMenu(false);
+        setShowViewMenu(false);
+        setShowToolsMenu(false);
+        setShowFontMenu(false);
+        setShowSizeMenu(false);
+        setShowColorPicker(false);
+    };
+
+// Source: download (18)/src/components/screenplay-editor.tsx
+const createNewDocument = () => {
+        if (window.confirm('محو المحتوى الحالي؟')) {
+            setHtmlContent('<div class="empty"><br></div>');
+        }
+    };
+
+// Source: src/components/ui/dialog.tsx
+const DialogHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col space-y-1.5 text-center sm:text-left",
+      className
+    )}
+    {...props}
+  />
+)
+
+
+// Source: src/hooks/use-toast.ts
+
+function dispatch(action: Action) {
+  memoryState = reducer(memoryState, action)
+  listeners.forEach((listener) => {
+    listener(memoryState)
+  })
+}
+
+// Source: src/components/ui/dropdown-menu.tsx
+const DropdownMenuShortcut = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) => {
+  return (
+    <span
+      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      {...props}
+    />
+  )
+}
+
+
+// Source: download (11)/src/components/editor/editor-toolbar.tsx
+export default function EditorToolbar() {
+  const tools = [
+    { icon: Bold, tooltip: 'Bold (Ctrl+B)' },
+    { icon: Italic, tooltip: 'Italic (Ctrl+I)' },
+    { icon: Underline, tooltip: 'Underline (Ctrl+U)' },
+    null, // Separator
+    { icon: List, tooltip: 'Bulleted List' },
+    { icon: ListOrdered, tooltip: 'Numbered List' },
+  ];
+
+  return (
+    <TooltipProvider>
+      <div className="flex items-center gap-1 border-b p-2 mb-2">
+        {tools.map((tool, index) => {
+          if (!tool) {
+            return <Separator key={`sep-${index}`} orientation="vertical" className="h-6 mx-1" />;
+          }
+          const Icon = tool.icon;
+          return (
+            <Tooltip key={tool.tooltip}>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" title={tool.tooltip} disabled>
+                  <Icon className="h-4 w-4" />
+                  <span className="sr-only">{tool.tooltip}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{tool.tooltip}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+// Source: download (17)/src/components/features-section.tsx
+export function FeaturesSection() {
+  return (
+    <section id="features" className="w-full py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="space-y-2">
+            <h2 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-5xl">
+              أدوات تخطيط وكتابة لا مثيل لها
+            </h2>
+            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+              من الفكرة الأولية إلى المسودة النهائية، يمنحك حكواتي Pro الأدوات التي تحتاجها لصياغة قصص لا تُنسى.
+            </p>
+          </div>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:grid-cols-3 lg:gap-12">
+          {features.map((feature, index) => (
+            <Card key={index} className="h-full bg-card/80 backdrop-blur-sm transform hover:-translate-y-2 transition-transform duration-300">
+              <CardHeader className="gap-4">
+                {feature.icon}
+                <div className="space-y-1">
+                  <CardTitle className="font-headline">
+                    {feature.title}
+                  </CardTitle>
+                  <CardDescription>{feature.description}</CardDescription>
+                </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Source: download (17)/src/components/footer.tsx
+export function Footer() {
+  const currentYear = new Date().getFullYear();
+  return (
+    <footer className="border-t bg-card">
+      <div className="container flex flex-col items-center justify-between gap-4 py-10 md:h-24 md:flex-row md:py-0">
+        <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
+          <Logo />
+        </div>
+        <p className="text-center text-sm text-muted-foreground md:text-right">
+          © {currentYear} حكواتي Pro. كل الحقوق محفوظة.
+        </p>
+      </div>
+    </footer>
+  );
+}
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const formatText = (command: string, value: string | null = null) => {
+        if (!editorRef.current) return;
+        editorRef.current.focus();
+        document.execCommand(command, false, value);
+        editorRef.current.focus();
+        updateContent();
+    };
+
+// Source: src/hooks/use-toast.ts
+
+function genId() {
+  count = (count + 1) % Number.MAX_SAFE_INTEGER
+  return count.toString()
+}
+
+// Source: download (18)/src/components/screenplay-editor.tsx
+const getClipboardText = (e: React.ClipboardEvent<HTMLDivElement>) => {
+        const html = e.clipboardData.getData('text/html');
+        if (html) {
+            const cleanHtml = DOMPurify.sanitize(html, { ALLOWED_TAGS: ['b', 'i', 'u', 'br', 'p', 'div'] });
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(cleanHtml, 'text/html');
+            return doc.body.innerText; // Return plain text from HTML.
+        }
+        return e.clipboardData.getData('text/plain') || null;
+    };
+
+// Source: src/js/monaco.js
+export function getEditorContent() {
+  if (editorInstance) {
+    return editorInstance.getValue();
+  }
+  return '';
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const getMarginTop = (from, to) => {
+      const spacingMap = {
+        'scene-header-1': { 'scene-header-3': '0px', 'action': '1em' },
+        'scene-header-3': { 'action': '0.5em' },
+        'action': { 'action': '0px', 'character': '1em', 'scene-header-1': '2em' },
+        'character': { 'dialogue': '0px', 'parenthetical': '0px' },
+        'parenthetical': { 'dialogue': '0px' },
+        'dialogue': { 'action': '1em', 'character': '1em' },
+        'transition': { 'scene-header-1': '2em' },
+        'basmala': { 'scene-header-1': '1em' }
+      };
+      return spacingMap[from]?.[to] || '0px';
+    };
+
+// Source: src/components/ui/chart.tsx
+
+function getPayloadConfigFromPayload(
+  config: ChartConfig,
+  payload: unknown,
+  key: string
+) {
+  if (typeof payload !== "object" || payload === null) {
+    return undefined
+  }
+
+  const payloadPayload =
+    "payload" in payload &&
+    typeof payload.payload === "object" &&
+    payload.payload !== null
+      ? payload.payload
+      : undefined
+
+  let configLabelKey: string = key
+
+  if (
+    key in payload &&
+    typeof payload[key as keyof typeof payload] === "string"
+  ) {
+    configLabelKey = payload[key as keyof typeof payload] as string
+  } else if (
+    payloadPayload &&
+    key in payloadPayload &&
+    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
+  ) {
+    configLabelKey = payloadPayload[
+      key as keyof typeof payloadPayload
+    ] as string
+  }
+
+  return configLabelKey in config
+    ? config[configLabelKey]
+    : config[key as keyof typeof config]
+}
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const handleClickOutside = (e: MouseEvent) => {
+            if (!(e.target as HTMLElement).closest('.menu-container, .toolbar-container')) {
+                // closeAllMenus();
+            }
+        };
+
+// Source: download (9)/main.js
+const handleSend = () => {
+                if (message.trim()) {
+                    onSendMessage(message);
+                    setMessage("");
+                }
+            };
+
+// Source: download (11)/src/components/layout/header.tsx
+export default function Header({ isAuthenticated, onAuthChange }: HeaderProps) {
+  const handleSignIn = () => onAuthChange(true);
+  const handleSignOut = () => onAuthChange(false);
+
+  return (
+    <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40">
+      <div className="container mx-auto flex items-center justify-between p-4 h-20">
+        <div className="flex items-center gap-3">
+          <BookMarked className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl font-headline font-bold">Arabic Quill</h1>
+        </div>
+        <div>
+          {isAuthenticated ? (
+            <div className="flex items-center gap-4">
+              <Avatar>
+                <AvatarImage src="https://placehold.co/40x40.png" alt="User" data-ai-hint="user avatar" />
+                <AvatarFallback>AQ</AvatarFallback>
+              </Avatar>
+              <Button variant="ghost" onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <Button onClick={handleSignIn}>
+              <GoogleIcon />
+              Sign in with Google
+            </Button>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// Source: src/components/header.tsx
+export function Header() {
+  return (
+    <header className="sticky top-0 z-50 flex h-16 items-center border-b bg-background/80 backdrop-blur-sm px-4 lg:px-6">
+      <div className="container flex items-center justify-between">
+        <Logo />
+        <nav className="hidden gap-6 lg:flex">
+          <a
+            className="text-sm font-medium underline-offset-4 hover:underline hover:text-primary"
+            href="#features"
+          >
+            الميزات الرئيسية
+          </a>
+          <a
+            className="text-sm font-medium underline-offset-4 hover:underline hover:text-primary"
+            href="#writing-tools"
+          >
+            أدوات الكتابة
+          </a>
+          <a
+            className="text-sm font-medium underline-offset-4 hover:underline hover:text-primary"
+            href="#production-features"
+          >
+            ميزات الإنتاج
+          </a>
+          <a
+            className="text-sm font-medium underline-offset-4 hover:underline hover:text-primary"
+            href="#ai-checker"
+          >
+            مدقق الذكاء الاصطناعي
+          </a>
+        </nav>
+        <Button>ابدأ الآن</Button>
+      </div>
+    </header>
+  );
+}
+
+// Source: download (17)/src/components/hero-section.tsx
+export function HeroSection() {
+  return (
+    <section className="w-full bg-background py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
+          <div className="flex flex-col justify-center space-y-4 text-center lg:text-right">
+            <div className="space-y-2">
+              <h1 className="font-headline text-4xl font-bold tracking-tighter text-primary sm:text-5xl xl:text-6xl/none">
+                حوّل فكرتك إلى تحفة فنية
+              </h1>
+              <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl lg:mx-0">
+                حكواتي Pro: арсеналك الكامل من الأدوات الاحترافية لصياغة سيناريوهات لا تُنسى. من الفكرة الأولى إلى الإنتاج النهائي، نحن معك في كل خطوة.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center lg:justify-end">
+              <Button
+                size="lg"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                ابدأ تجربتك المجانية
+              </Button>
+              <Button size="lg" variant="outline">
+                شاهد العرض التوضيحي
+              </Button>
+            </div>
+          </div>
+          <Image
+            alt="Hero"
+            className="mx-auto aspect-video overflow-hidden rounded-xl object-cover object-center sm:w-full lg:order-last"
+            data-ai-hint="screenplay editing software"
+            height="310"
+            src="https://placehold.co/550x310.png"
+            width="550"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Source: download (18)/src/app/page.tsx
+export default function Home(props: any) {
+  const [showEditor, setShowEditor] = useState(false);
+
+  if (showEditor) {
+    return (
+      <main className="min-h-screen bg-background">
+        {/* Header with back button */}
+        <div className="border-b bg-white shadow-sm sticky top-0 z-10">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              onClick={() => setShowEditor(false)}
+              className="flex items-center text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4 ml-2" />
+              العودة للصفحة الرئيسية
+            </Button>
+            
+            <h1 className="text-xl font-bold text-foreground">
+              محرر السيناريو العربي
+            </h1>
+            
+            <div className="w-40"></div> {/* Spacer for centering */}
+          </div>
+        </div>
+        
+        {/* Editor */}
+        <div className="container mx-auto">
+          <ScreenplayEditor />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main>
+      <LandingPage onStartEditor={() => setShowEditor(true)} />
+    </main>
+  );
+}
+
+// Source: src/app/page.tsx
+export default function Home() {
+  return (
+    <div className="flex flex-col min-h-dvh bg-background text-foreground">
+      <Header />
+      <main className="flex-1">
+        <HeroSection />
+        <FeaturesSection />
+        <WritingToolsSection />
+        <ProductionFeaturesSection />
+        <AiFeatureSection />
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+// Source: src/js/monaco.js
+export function initMonaco(containerId, initialContent) {
+  if (editorInstance) {
+    editorInstance.dispose();
+  }
+
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error(`Container with id "${containerId}" not found.`);
+    return;
+  }
+
+  editorInstance = monaco.editor.create(container, {
+    value: initialContent,
+    language: 'rust', // Default language
+    theme: 'vs-dark',
+    automaticLayout: true,
+  });
+}
+
+// Source: download (18)/src/components/screenplay-editor.tsx
+const insertFragment = (fragment: DocumentFragment) => {
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        
+        const last = fragment.lastChild;
+        range.insertNode(fragment);
+
+        if (last) {
+            // Create a new range, set its start after the last inserted node, and collapse it
+            const newRange = document.createRange();
+            newRange.setStartAfter(last);
+            newRange.collapse(true);
+            
+            // Clear any existing selections and add the new range
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+        }
+    };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const insertProcessedIntoDOM = (processedLines) => {
+      let html = '';
+      const batchLinesForAudit = [];
+  
+      for (const line of processedLines) {
+        const idx = globalLineCounterRef.current;
+        if (line.isEmpty) {
+          html += `<div class="action" style="min-height:1.6em;" data-line-index="${idx}"><br></div>`;
+        } else {
+          batchLinesForAudit.push({ index: idx, raw: line.content, cls: line.format });
+          const div = document.createElement('div');
+          div.className = line.format;
+          div.setAttribute('data-line-index', String(idx));
+          if (line.isHtml) div.innerHTML = line.content;
+          else div.textContent = line.content;
+          html += div.outerHTML;
+        }
+        globalLineCounterRef.current++;
+      }
+  
+      return { html, batchLinesForAudit };
+    };
+
+// Source: download (12)/src/lib.rs
+ fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const loadSampleText = () => {
+        if (!editorRef.current) return;
+        editorRef.current.innerHTML = '';
+        const elements = [
+            { type: 'basmala', text: 'بسم الله الرحمن الرحيم' },
+            { type: 'scene-header-1', text: '<span>مشهد1</span><span>ليل - داخلي</span>', isHtml: true },
+            { type: 'scene-header-3', text: 'مسجد السيد البدوي' },
+            { type: 'action', text: 'يكتب على الشاشة ( ظظا )' }, { type: 'action', text: 'تغنى أم أم في المسجد تجاه الشبح وتقف أمامه' },
+            { type: 'character', text: 'أم أم' }, { type: 'dialogue', text: 'شاطع يا سيد يا بدوي .. اقف جيش .. انا عارفة أني خاطىة .. بس عازر إيك تشتعل عند ربنا' },
+            { type: 'character', text: 'الرجل 1' }, { type: 'dialogue', text: 'هذا مثال لشخصية عامة.' },
+            { type: 'transition', text: 'قطع' },
+        ];
+        let longText = '';
+        for (let i = 0; i < 30; i++) {
+            longText += 'هذا سطر طويل من النص لملء الصفحة واختبار التمرير وتقسيم الصفحات. يتم تكرار هذا النص عدة مرات للتأكد من أن المحتوى يتجاوز ارتفاع الصفحة الواحدة. ';
+        }
+        elements.push({ type: 'action', text: longText });
+        elements.push({ type: 'character', text: 'شخصية في الصفحة الثانية' });
+        elements.push({ type: 'dialogue', text: 'هذا حوار في الصفحة الثانية لاختبار كيفية ظهور العناصر عبر فواصل الصفحات.' });
+
+        elements.forEach(element => {
+            const div = document.createElement('div');
+            div.className = element.type;
+            if (element.isHtml) { div.innerHTML = element.text; } else { div.textContent = element.text; }
+            Object.assign(div.style, getFormatStyles(element.type as ScreenplayFormatId));
+            editorRef.current?.appendChild(div);
+        });
+        const lastElement = editorRef.current.lastElementChild;
+        if (lastElement) {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(lastElement);
+            range.collapse(false);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            setCurrentFormat('action');
+        }
+        updateContent();
+    };
+
+// Source: download (17)/src/components/logo.tsx
+export function Logo() {
+  return (
+    <div className="flex items-center gap-2">
+      <Feather className="h-8 w-8 text-primary" />
+      <span className="font-headline text-2xl font-bold text-foreground">
+        حكواتي Pro
+      </span>
+    </div>
+  );
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const mapModelOutputToFormat = (modelResult, text, context) => {
+      const base = classifyLineInstantly(text, context.previousFormat);
+      if (modelResult[0]?.score > 0.8) {
+        const label = modelResult[0].label.toLowerCase();
+        if (label.includes('dialogue') || label.includes('conversation')) return 'dialogue';
+        if (label.includes('action') || label.includes('description')) return 'action';
+      }
+      if (['character', 'scene-header-1', 'scene-header-2', 'scene-header-3', 'transition'].includes(base)) return base;
+      return base;
+    };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const markLineAsModified = (lineIndex) => {
+      setLastModifiedLines(prev => new Set([...prev, lineIndex]));
+      if (editorRef.current) {
+        const divs = editorRef.current.children;
+        for (let div of divs) {
+          if (parseInt(div.getAttribute('data-line-index') || '0') === lineIndex) {
+            div.dataset.lastModified = Date.now().toString();
+            break;
+          }
+        }
+      }
+    };
+
+// Source: src/components/ui/menubar.tsx
+
+function MenubarGroup({
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Group>) {
+  return <MenubarPrimitive.Group {...props} />
+}
+
+// Source: src/components/ui/menubar.tsx
+
+function MenubarMenu({
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
+  return <MenubarPrimitive.Menu {...props} />
+}
+
+// Source: src/components/ui/menubar.tsx
+
+function MenubarPortal({
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Portal>) {
+  return <MenubarPrimitive.Portal {...props} />
+}
+
+// Source: src/components/ui/menubar.tsx
+
+function MenubarRadioGroup({
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.RadioGroup>) {
+  return <MenubarPrimitive.RadioGroup {...props} />
+}
+
+// Source: src/components/ui/menubar.tsx
+const MenubarShortcut = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) => {
+  return (
+    <span
+      className={cn(
+        "ml-auto text-xs tracking-widest text-muted-foreground",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+
+// Source: src/components/ui/menubar.tsx
+
+function MenubarSub({
+  ...props
+}: React.ComponentProps<typeof MenubarPrimitive.Sub>) {
+  return <MenubarPrimitive.Sub data-slot="menubar-sub" {...props} />
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const needsEmptyLine = (prev, cur) => {
+      const rules = {
+        'scene-header-3': ['action'],
+        'action': ['character', 'transition'],
+        'dialogue': ['character', 'action', 'transition'],
+        'transition': ['scene-header-1']
+      };
+      return rules[prev]?.includes(cur) || false;
+    };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+ function normalizeExistingContent() {
+    if (!editorRef.current) return;
+  
+    console.log('\[SmartFormatting] إعادة تطبيع المحتوى...');
+  
+    const allDivs = Array.from(editorRef.current.children);
+    const contentLines = \[];
+    let previousFormatClass = 'action';
+    const batchLinesForAudit = \[];
+    const classifier = classifierRef.current;
+  
+    // المرحلة 1: إعادة التصنيف
+    for (const div of allDivs) {
+      const content = (div.textContent || '').trim();
+      if (!content) {
+        contentLines.push({ content: '', format: 'action', isHtml: false, isEmpty: true });
+        continue;
+      }
+  
+      // نفس نهج handlePaste:
+      let formatClass;
+      try {
+        if (useAgentSystem) {
+          const res = await classifyLineWithAgents(content, { previousFormat: previousFormatClass, position: 'normalize' });
+          formatClass = res.classification;
+        } else {
+          formatClass = classifier.classifyLine(content, previousFormatClass);
+        }
+      } catch {
+        formatClass = classifier.classifyLine(content, previousFormatClass);
+      }
+  
+      if (formatClass === 'character-inline') {
+        const parts = content.split(/:/);
+        const namePart = parts.shift().trim();
+        const dialoguePart = parts.join(':').trim();
+  
+        contentLines.push({ content: namePart + ' :', format: 'character', isHtml: false });
+        if (dialoguePart) contentLines.push({ content: dialoguePart, format: 'dialogue', isHtml: false });
+        previousFormatClass = 'dialogue';
+        continue;
+      }
+  
+      let cleanContent = content;
+      if (formatClass === 'character' && !content.endsWith(':') && !content.endsWith('：')) {
+        cleanContent += ' :';
+      }
+  
+      contentLines.push({ content: cleanContent, format: formatClass, isHtml: false });
+      previousFormatClass = formatClass;
+  
+    }
+  
+    // المرحلة 2: ضبط الفراغات
+    const normalized = normalizeSpacing(contentLines, false);
+  
+    // المرحلة 3: إعادة بناء DOM
+    editorRef.current.innerHTML = '';
+    globalLineCounterRef.current = 0;
+  
+    for (const line of normalized) {
+      const idx = globalLineCounterRef.current;
+      const div = document.createElement('div');
+      div.setAttribute('data-line-index', String(idx));
+  
+  
+      if (line.isEmpty) {
+        div.className = 'action';
+        div.innerHTML = '<br>';
+        div.style.minHeight = '1.6em';
+      } else {
+        batchLinesForAudit.push({ index: idx, raw: line.content, cls: line.format });
+        div.className = line.format;
+        div.textContent = line.content;
+        Object.assign(div.style, getFormatStyles(line.format));
+      }
+  
+      editorRef.current.appendChild(div);
+      globalLineCounterRef.current++;
+  
+  
+    }
+  
+    updateContent();
+  
+    // المرحلة 4: تدقيق Gemini
+    if (ENABLE\_GEMINI\_AUDIT && batchLinesForAudit.length) {
+      try {
+        setIsAuditing(true);
+        const subset = batchLinesForAudit.slice(-GEMINI\_AUDIT\_WINDOW);
+        const corrections = await auditWithGemini(subset);
+  
+  
+        if (corrections.length && editorRef.current) {
+          const map = new Map(corrections.map(c => [c.index, c.suggestedClass]));
+          const children = editorRef.current.children;
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            const idxAttr = child.getAttribute('data-line-index');
+            if (!idxAttr) continue;
+            const idx = parseInt(idxAttr, 10);
+            if (map.has(idx)) {
+              const newCls = map.get(idx);
+              if (child.className !== newCls) {
+                child.className = newCls;
+                Object.assign(child.style, getFormatStyles(newCls));
+              }
+            }
+          }
+          setHtmlContent(editorRef.current.innerHTML);
+        }
+      } catch (err) {
+        console.error('[SmartFormatting] Gemini audit error:', err);
+      } finally {
+        setIsAuditing(false);
+      }
+  
+  
+    }
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const normalizeSpacing = (contentLines, preservePDFSpacing = false) => {
+      const normalized = [];
+      let prevFmt = null;
+  
+      for (let i = 0; i < contentLines.length; i++) {
+        const cur = contentLines[i];
+        const empty = !cur.content.trim();
+  
+        if (empty) {
+          if (preservePDFSpacing) {
+            normalized.push({ ...cur, isEmpty: true, format: 'action' });
+          }
+          continue; // لا نضيف الفراغات العشوائية إلا عند الحاجة
+        }
+  
+        if (!preservePDFSpacing && prevFmt && needsEmptyLine(prevFmt, cur.format)) {
+          normalized.push({ content: '', format: 'action', isHtml: false, isEmpty: true });
+        }
+  
+        normalized.push(cur);
+        prevFmt = cur.format;
+      }
+  
+      return normalized;
+    };
+
+// Source: src/hooks/use-mobile.tsx
+const onChange = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    }
+    
+
+// Source: download (17)/src/components/production-features-section.tsx
+export function ProductionFeaturesSection() {
+  return (
+    <section id="production-features" className="w-full py-12 md:py-24 lg:py-32 bg-secondary/20">
+      <div className="container px-4 md:px-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="space-y-2">
+            <h2 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-5xl">
+              ميزات مصممة للإنتاج الاحترافي
+            </h2>
+            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+              أدوات قوية لتسهيل عملية الإنتاج من المراجعة والتقارير إلى التعاون الجماعي وإدارة كل تفاصيل العمل.
+            </p>
+          </div>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:grid-cols-3 lg:gap-12">
+          {features.map((feature, index) => (
+            <Card key={index} className="h-full bg-card/80 backdrop-blur-sm transform hover:-translate-y-2 transition-transform duration-300">
+              <CardHeader className="gap-4">
+                {feature.icon}
+                <div className="space-y-1">
+                  <CardTitle className="font-headline">
+                    {feature.title}
+                  </CardTitle>
+                  <CardDescription>{feature.description}</CardDescription>
+                </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const queueForGeminiReview = (element, content, format) => {
+      const item = {
+        element,
+        content: content.trim(),
+        format,
+        timestamp: Date.now(),
+        lineIndex: element.getAttribute('data-line-index')
+      };
+      reviewQueueRef.current.push(item);
+      if (reviewTimeoutRef.current) clearTimeout(reviewTimeoutRef.current);
+      reviewTimeoutRef.current = setTimeout(processReviewQueue, 2000);
+    };
+
+// Source: download (9)/main.js
+const renderContent = () => {
+                if (error) return <p className="text-red-400 font-semibold">{error}</p>;
+                if (!resultData && !rawText) return <p className="text-slate-400">لا توجد نتائج لعرضها.</p>;
+                
+                const textToRender = typeof resultData === 'string' ? resultData : rawText;
+                return <div className="space-y-2">{renderMarkdown(textToRender)}</div>;
+            };
+
+// Source: download (9)/main.js
+const renderMarkdown = (text) => {
+                if (!text) return null;
+                return text.split('\\n').map((line, index) => {
+                    if (line.startsWith('## ')) return <h2 key={index} className="text-2xl font-bold mt-4 mb-2 text-sky-400">{line.substring(3)}</h2>;
+                    if (line.startsWith('# ')) return <h1 key={index} className="text-3xl font-bold mt-6 mb-3 text-sky-300">{line.substring(2)}</h1>;
+                    if (line.trim().startsWith('- ')) return <li key={index} className="mr-6 list-disc">{line.substring(2)}</li>;
+                    return <p key={index} className="my-2 leading-relaxed">{line}</p>;
+                });
+            };
+
+// Source: download (9)/main.js
+const ResultsDisplay = ({ resultData, rawText, error, selectedTaskType }) => {
+            const renderMarkdown = (text) => {
+                if (!text) return null;
+                return text.split('\\n').map((line, index) => {
+                    if (line.startsWith('## ')) return <h2 key={index} className="text-2xl font-bold mt-4 mb-2 text-sky-400">{line.substring(3)}</h2>;
+                    if (line.startsWith('# ')) return <h1 key={index} className="text-3xl font-bold mt-6 mb-3 text-sky-300">{line.substring(2)}</h1>;
+                    if (line.trim().startsWith('- ')) return <li key={index} className="mr-6 list-disc">{line.substring(2)}</li>;
+                    return <p key={index} className="my-2 leading-relaxed">{line}</p>;
+                });
+            };
+
+            const renderContent = () => {
+                if (error) return <p className="text-red-400 font-semibold">{error}</p>;
+                if (!resultData && !rawText) return <p className="text-slate-400">لا توجد نتائج لعرضها.</p>;
+                
+                const textToRender = typeof resultData === 'string' ? resultData : rawText;
+                return <div className="space-y-2">{renderMarkdown(textToRender)}</div>;
+            };
+
+            return (
+                <div className="w-full mt-8 p-6 bg-slate-900/70 rounded-xl shadow-2xl border border-panel-border">
+                    <h2 className="text-2xl font-bold text-slate-100 mb-4 border-b-2 border-slate-700 pb-2">النتائج</h2>
+                    <div className="prose max-w-none">{renderContent()}</div>
+                </div>
+            );
+        };
+
+// Source: download (11)/src/app/layout.tsx
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" dir="ltr">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400&display=swap" rel="stylesheet" />
+      </head>
+      <body className="font-body antialiased">
+        {children}
+        <Toaster />
+      </body>
+    </html>
+  );
+}
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const Ruler = ({ orientation = 'horizontal', isDarkMode }) => {
+    const length = orientation === 'horizontal' ? 1000 : 1123;
+    const lengthInCm = Math.floor(length / PIXELS_PER_CM);
+    const numbers = [];
+    for (let i = 1; i <= lengthInCm; i++) {
+      const style = orientation === 'horizontal'
+        ? { right: `${i * PIXELS_PER_CM}px`, transform: 'translateX(50%)' }
+        : { top: `${i * PIXELS_PER_CM}px`, transform: 'translateY(-50%)' };
+      numbers.push(<span key={i} className="ruler-number" style={style}>{i}</span>);
+    }
+    return (
+      <div className={`ruler-container ${orientation} ${isDarkMode ? 'dark' : ''}`}>
+        {numbers}
+      </div>
+    );
+  };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const ScreenplayEditor = () => {
+    // -------------------- الحالة العامة --------------------
+    const [htmlContent, setHtmlContent] = useState('');
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [currentFormat, setCurrentFormat] = useState('action');
+    const [selectedFont, setSelectedFont] = useState('Amiri');
+    const [selectedSize, setSelectedSize] = useState('14pt');
+    const [documentStats, setDocumentStats] = useState({ characters: 0, words: 0, pages: 1, scenes: 0 });
+    const [pageCount, setPageCount] = useState(1);
+    const [stickyHeaderHeight, setStickyHeaderHeight] = useState(0);
+    const [isAuditing, setIsAuditing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [undoStack, setUndoStack] = useState([]);
+    const [redoStack, setRedoStack] = useState([]);
+    const [_lastSavedContent, setLastSavedContent] = useState('');
+  
+    // -------------------- القوائم و الحوارات -----------------
+    const [showFontMenu, setShowFontMenu] = useState(false);
+    const [showSizeMenu, setShowSizeMenu] = useState(false);
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showFileMenu, setShowFileMenu] = useState(false);
+    const [showEditMenu, setShowEditMenu] = useState(false);
+    const [showViewMenu, setShowViewMenu] = useState(false);
+    const [showToolsMenu, setShowToolsMenu] = useState(false);
+    const [showSearchDialog, setShowSearchDialog] = useState(false);
+    const [showReplaceDialog, setShowReplaceDialog] = useState(false);
+    const [showCharacterRename, setShowCharacterRename] = useState(false);
+  
+    // -------------------- الذكاء المحلي / الوكلاء --------------
+    const [localClassifier, setLocalClassifier] = useState(null);
+    const [isLoadingLocalAI, setIsLoadingLocalAI] = useState(false);
+    const [useAgentSystem, setUseAgentSystem] = useState(true);
+    const [useWorkflowSystem, setUseWorkflowSystem] = useState(true);
+    const [agentSystemStats, setAgentSystemStats] = useState({
+      totalClassifications: 0,
+      agentDecisions: 0,
+      coordinatorDecisions: 0,
+      workflowDecisions: 0,
+      averageConfidence: 0,
+      totalApiCalls: 0,
+      currentStrategy: 'fast-sequential'
+    });
+  
+    // -------------------- مراجعة ذكية / طوابير -----------------
+    const reviewQueueRef = useRef([]);
+    const reviewTimeoutRef = useRef(null);
+    const backgroundAuditorRef = useRef(null);
+    const lastAuditTimeRef = useRef(Date.now());
+    const [lastModifiedLines, setLastModifiedLines] = useState(new Set());
+  
+    // -------------------- مراجع DOM ---------------------------
+    const classifierRef = useRef(new ScreenplayClassifier());
+    const geminiCoordinator = useRef(null);
+    const editorRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+    const stickyHeaderRef = useRef(null);
+    const globalLineCounterRef = useRef(0);
+  
+    // -------------------- بيانات التنسيق ----------------------
+    const screenplayFormats = [
+      { id: 'basmala', label: 'بسملة', shortcut: '', color: 'bg-purple-100', icon: <BookHeart size={18} /> },
+      { id: 'scene-header-1', label: 'عنوان المشهد (1)', shortcut: 'Ctrl+1', color: 'bg-blue-100', icon: <Film size={18} /> },
+      { id: 'scene-header-2', label: 'عنوان المشهد (2)', shortcut: 'Tab', color: 'bg-blue-50', icon: <MapPin size={18} /> },
+      { id: 'scene-header-3', label: 'عنوان المشهد (3)', shortcut: 'Tab', color: 'bg-blue-25', icon: <Camera size={18} /> },
+      { id: 'action', label: 'الفعل/الحدث', shortcut: 'Ctrl+4', color: 'bg-gray-100', icon: <Feather size={18} /> },
+      { id: 'character', label: 'شخصية', shortcut: 'Ctrl+2', color: 'bg-green-100', icon: <UserSquare size={18} /> },
+      { id: 'parenthetical', label: 'بين قوسين', shortcut: 'Tab', color: 'bg-yellow-100', icon: <Parentheses size={18} /> },
+      { id: 'dialogue', label: 'حوار', shortcut: 'Ctrl+3', color: 'bg-orange-100', icon: <MessageCircle size={18} /> },
+      { id: 'transition', label: 'انتقال', shortcut: 'Ctrl+6', color: 'bg-red-100', icon: <FastForward size={18} /> }
+    ];
+  
+    const dramaAnalyzerTools = [
+      { id: 'day-night', label: 'وضع الرؤية', icon: <Sun size={20} />, action: () => setIsDarkMode(p => !p) },
+      { id: 'scene-header', label: 'رأس المشهد', icon: <Film size={20} />, action: () => applyFormatToCurrentLine('scene-header-1') },
+      { id: 'number-1', label: 'رقم 1', icon: <span className="text-lg font-bold">1</span>, action: () => applyFormatToCurrentLine('scene-header-1') },
+      { id: 'number-2', label: 'رقم 2', icon: <span className="text-lg font-bold">2</span>, action: () => applyFormatToCurrentLine('scene-header-2') },
+      { id: 'number-3', label: 'رقم 3', icon: <span className="text-lg font-bold">3</span>, action: () => applyFormatToCurrentLine('scene-header-3') },
+      { id: 'action', label: 'الحركة/الوصف', icon: <Feather size={20} />, action: () => applyFormatToCurrentLine('action') },
+      { id: 'character', label: 'الشخصية', icon: <UserSquare size={20} />, action: () => applyFormatToCurrentLine('character') },
+      { id: 'dialogue', label: 'الحوار', icon: <MessageCircle size={20} />, action: () => applyFormatToCurrentLine('dialogue') },
+      { id: 'transition', label: 'الانتقال', icon: <FastForward size={20} />, action: () => applyFormatToCurrentLine('transition') }
+    ];
+  
+    const screenplayEditorTools = [
+      { id: 'new-text', label: 'نص جديد', icon: <FilePlus size={20} />, action: createNewDocument },
+      { id: 'load-file', label: 'تحميل ملف', icon: <Upload size={20} />, action: () => document.getElementById('file-import-input').click() },
+      { id: 'save-file', label: 'حفظ ملف', icon: <Save size={20} />, action: saveDocument },
+      { id: 'print', label: 'طباعة', icon: <Printer size={20} />, action: printDocument },
+      { id: 'gemini-audit', label: 'تدقيق ذكي', icon: <Sparkles size={20} />, action: () => smartNormalizeDocument() },
+      { id: 'font-type', label: 'نوع الخط', icon: <Type size={20} />, action: () => setShowFontMenu(p => !p) },
+      { id: 'font-size', label: 'حجم الخط', icon: <Settings size={20} />, action: () => setShowSizeMenu(p => !p) },
+      { id: 'italic', label: 'الخط المائل', icon: <Italic size={20} />, action: () => formatText('italic') },
+      { id: 'underline', label: 'وضع خط سفلي', icon: <Underline size={20} />, action: () => formatText('underline') },
+      { id: 'bold', label: 'الخط العريض', icon: <Bold size={20} />, action: () => formatText('bold') },
+      { id: 'text-color', label: 'لون الخط', icon: <Palette size={20} />, action: () => setShowColorPicker(p => !p) }
+    ];
+  
+    const colors = ['#000000', '#e03131', '#c2255c', '#9c36b5', '#6741d9', '#3b5bdb', '#1b6ec2', '#0c8599', '#099268', '#2f9e44', '#66a80f', '#f08c00', '#e8590c', '#5f676e', '#343a40'];
+    const fonts = [
+      { value: 'Amiri', label: 'أميري' },
+      { value: 'Noto Sans Arabic', label: 'نوتو سانس عربي' },
+      { value: 'Cairo', label: 'القاهرة' },
+      { value: 'Tajawal', label: 'تجوّل' },
+      { value: 'Almarai', label: 'المراي' },
+      { value: 'Markazi Text', label: 'مركزي' },
+      { value: 'Reem Kufi', label: 'ريم كوفي' },
+      { value: 'Scheherazade New', label: 'شهرزاد الجديد' },
+      { value: 'Lateef', label: 'لطيف' },
+      { value: 'Aref Ruqaa', label: 'عارف رقعة' },
+      { value: 'Arial', label: 'Arial' },
+      { value: 'Tahoma', label: 'Tahoma' }
+    ];
+    const textSizes = [
+      { value: '8pt', label: '8' }, { value: '9pt', label: '9' }, { value: '10pt', label: '10' },
+      { value: '11pt', label: '11' }, { value: '12pt', label: '12' }, { value: '14pt', label: '14' },
+      { value: '16pt', label: '16' }, { value: '18pt', label: '18' }, { value: '24pt', label: '24' }, { value: '36pt', label: '36' }
+    ];
+  
+    // ==================== تنسيقات CSS للسطر =====================
+    const getFormatStyles = useCallback((formatType) => {
+      const base = {
+        fontFamily: `${selectedFont}, Amiri, Cairo, Noto Sans Arabic, Arial, sans-serif`,
+        fontSize: selectedSize,
+        direction: 'rtl',
+        margin: '0',
+        lineHeight: '1.6',
+        minHeight: '1.6em'
+      };
+      const fm = {
+        'basmala': { textAlign: 'left', fontWeight: 'bold', fontSize: BASMALA_FONT_SIZE },
+        'scene-header-1': { textTransform: 'uppercase', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' },
+        'scene-header-2': { textAlign: 'left', fontStyle: 'italic' },
+        'scene-header-3': { textAlign: 'center', fontWeight: 'bold' },
+        'action': { textAlign: 'right' },
+        'character': { textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', margin: `0 ${CHARACTER_MARGIN}` },
+        'parenthetical': { textAlign: 'center', fontStyle: 'italic', margin: `0 ${PARENTHETICAL_MARGIN}` },
+        'dialogue': { textAlign: 'center', margin: `0 ${DIALOGUE_MARGIN}` },
+        'transition': { textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase' }
+      };
+      return { ...base, ...(fm[formatType] || {}) };
+    }, [selectedFont, selectedSize]);
+  
+    // ==================== حساب الإحصاءات =======================
+    const calculateStats = useCallback(() => {
+      if (!editorRef.current) return;
+      const content = editorRef.current.textContent || '';
+      const characters = content.length;
+      const words = content.trim().split(/\s+/).filter(Boolean).length;
+      const scenes = editorRef.current.querySelectorAll('.scene-header-1').length;
+      const pages = Math.max(1, Math.ceil(editorRef.current.scrollHeight / (A4_PAGE_HEIGHT_PX + 20)));
+      setDocumentStats({ characters, words, pages, scenes });
+      setPageCount(pages);
+    }, []);
+  
+    // إعادة تطبيق الأنماط بعد كل تغيير خط/حجم أو htmlContent
+    useEffect(() => {
+      if (editorRef.current) {
+        const divs = editorRef.current.querySelectorAll('div[class]');
+        divs.forEach(div => {
+          Object.assign(div.style, getFormatStyles(div.className));
+        });
+        calculateStats();
+      }
+    }, [selectedFont, selectedSize, htmlContent, getFormatStyles, calculateStats]);
+  
+    // ==================== خرائط المسافات و الانتقال ===================
+    const getMarginTop = (from, to) => {
+      const spacingMap = {
+        'scene-header-1': { 'scene-header-3': '0px', 'action': '1em' },
+        'scene-header-3': { 'action': '0.5em' },
+        'action': { 'action': '0px', 'character': '1em', 'scene-header-1': '2em' },
+        'character': { 'dialogue': '0px', 'parenthetical': '0px' },
+        'parenthetical': { 'dialogue': '0px' },
+        'dialogue': { 'action': '1em', 'character': '1em' },
+        'transition': { 'scene-header-1': '2em' },
+        'basmala': { 'scene-header-1': '1em' }
+      };
+      return spacingMap[from]?.[to] || '0px';
+    };
+  
+    const getNextFormatOnEnter = (fmt) => ({
+      'scene-header-1': 'scene-header-3',
+      'scene-header-3': 'action',
+      'action': 'action',
+      'character': 'dialogue',
+      'parenthetical': 'dialogue',
+      'dialogue': 'action',
+      'transition': 'scene-header-1',
+      'basmala': 'scene-header-1'
+    }[fmt] || 'action');
+  
+    const needsEmptyLine = (prev, cur) => {
+      const rules = {
+        'scene-header-3': ['action'],
+        'action': ['character', 'transition'],
+        'dialogue': ['character', 'action', 'transition'],
+        'transition': ['scene-header-1']
+      };
+      return rules[prev]?.includes(cur) || false;
+    };
+  
+    // ==================== توحيد مسارات المعالجة ====================
+    /**
+     * المرحلة 1: التصنيف
+     * @param {string[]} rawLines - أسطر خام
+     * @param {string} previousFormatClass
+     * @param {boolean} useAgents
+     * @param {boolean} preservePDFSpacing
+     * @param {('paste'|'import'|'normalize'|'enter')} position
+     * @returns {Promise<{processed: Array<{content:string,format:string,isHtml:boolean,isEmpty?:boolean}>, batchForAudit: Array<{index:number,raw:string,cls:string}>}>}
+     */
+    const classifyLinesPipeline = async (rawLines, previousFormatClass, useAgents, preservePDFSpacing, position) => {
+      const classifier = classifierRef.current;
+      const processed = [];
+      const batchForAudit = [];
+  
+      let prevFmt = previousFormatClass;
+  
+      for (let ln of rawLines) {
+        let line = ln.trim();
+        if (STRIP_LEADING_BULLETS && line) line = stripLeadingBullet(line);
+  
+        if (!line) {
+          processed.push({ content: '', format: 'action', isHtml: false, isEmpty: true });
+          continue;
+        }
+  
+        let formatClass = 'action';
+        if (useAgents) {
+          try {
+            const res = await classifyLineWithAgents(line, {
+              previousFormat: prevFmt,
+              position,
+              isTyping: position === 'enter'
+            });
+            formatClass = res.classification;
+          } catch (err) {
+            console.warn('[Agents] Fallback to local classifier:', err);
+            formatClass = classifier.classifyLine(line, prevFmt);
+          }
+        } else {
+          formatClass = classifier.classifyLine(line, prevFmt);
+        }
+  
+        let cleanLine = line;
+        let isHtml = false;
+  
+        if (formatClass === 'scene-header-1-split') {
+          const split = classifier.splitSceneHeader(line);
+          if (split) {
+            formatClass = 'scene-header-1';
+            cleanLine = `<span>${split.sceneNumber}</span><span>${split.sceneInfo}</span>`;
+            isHtml = true;
+          }
+        } else if (formatClass === 'character-inline') {
+          const parts = line.split(/:/);
+          const namePart = parts.shift().trim();
+          const dialoguePart = parts.join(':').trim();
+  
+          // سطر شخصية
+          processed.push({ content: namePart + ' :', format: 'character', isHtml: false });
+          // سطر حوار
+          processed.push({ content: dialoguePart, format: 'dialogue', isHtml: false });
+          prevFmt = 'dialogue';
+          continue; // انتقل للسطر التالي
+        }
+  
+        if (formatClass === 'character' && !line.endsWith(':') && !line.endsWith('：')) {
+          cleanLine += ' :';
+        }
+  
+        processed.push({ content: cleanLine, format: formatClass, isHtml });
+        prevFmt = formatClass;
+      }
+  
+      // المرحلة 2: تطبيع المسافات
+      const normalized = normalizeSpacing(processed, preservePDFSpacing);
+  
+      // المرحلة 3: إعداد دفعة التدقيق
+      normalized.forEach(() => { }); // placeholder to keep linter happy
+  
+      // سيتم بناء batchForAudit عند بناء DOM لإعطاء lineIndex الصحيح لاحقًا
+  
+      return { processed: normalized, batchForAudit };
+    };
+  
+    /**
+     * تطبيع المسافات (نفس منطق handlePaste)
+     */
+    const normalizeSpacing = (contentLines, preservePDFSpacing = false) => {
+      const normalized = [];
+      let prevFmt = null;
+  
+      for (let i = 0; i < contentLines.length; i++) {
+        const cur = contentLines[i];
+        const empty = !cur.content.trim();
+  
+        if (empty) {
+          if (preservePDFSpacing) {
+            normalized.push({ ...cur, isEmpty: true, format: 'action' });
+          }
+          continue; // لا نضيف الفراغات العشوائية إلا عند الحاجة
+        }
+  
+        if (!preservePDFSpacing && prevFmt && needsEmptyLine(prevFmt, cur.format)) {
+          normalized.push({ content: '', format: 'action', isHtml: false, isEmpty: true });
+        }
+  
+        normalized.push(cur);
+        prevFmt = cur.format;
+      }
+  
+      return normalized;
+    };
+  
+    /**
+     * بناء HTML + إدراج في الـ DOM + إرجاع batchLinesForAudit
+     */
+    const insertProcessedIntoDOM = (processedLines) => {
+      let html = '';
+      const batchLinesForAudit = [];
+  
+      for (const line of processedLines) {
+        const idx = globalLineCounterRef.current;
+        if (line.isEmpty) {
+          html += `<div class="action" style="min-height:1.6em;" data-line-index="${idx}"><br></div>`;
+        } else {
+          batchLinesForAudit.push({ index: idx, raw: line.content, cls: line.format });
+          const div = document.createElement('div');
+          div.className = line.format;
+          div.setAttribute('data-line-index', String(idx));
+          if (line.isHtml) div.innerHTML = line.content;
+          else div.textContent = line.content;
+          html += div.outerHTML;
+        }
+        globalLineCounterRef.current++;
+      }
+  
+      return { html, batchLinesForAudit };
+    };
+  
+    /**
+     * تدقيق جيمني وتطبيق التصحيحات
+     */
+    const auditAndApplyCorrections = async (batchLines) => {
+      if (!ENABLE_GEMINI_AUDIT || batchLines.length === 0 || !editorRef.current) return;
+      try {
+        setIsAuditing(true);
+        const subset = batchLines.slice(-GEMINI_AUDIT_WINDOW);
+        const corrections = await auditWithGemini(subset);
+        if (corrections.length > 0) {
+          const map = new Map(corrections.map(c => [c.index, c.suggestedClass]));
+          const children = editorRef.current.children;
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            const idxAttr = child.getAttribute('data-line-index');
+            if (!idxAttr) continue;
+            const lineIdx = parseInt(idxAttr, 10);
+            if (map.has(lineIdx)) {
+              const newCls = map.get(lineIdx);
+              if (child.className !== newCls) {
+                child.className = newCls;
+                Object.assign(child.style, getFormatStyles(newCls));
+              }
+            }
+          }
+          setHtmlContent(editorRef.current.innerHTML);
+        }
+      } catch (err) {
+        console.error('[GeminiAudit] Error:', err);
+      } finally {
+        setIsAuditing(false);
+      }
+    };
+  
+    // ==================== الدوال العامة للتنسيق ====================
+    const updateContent = useCallback(async (shouldSaveToUndo = true) => {
+      if (!editorRef.current) return;
+      const html = editorRef.current.innerHTML;
+  
+      if (shouldSaveToUndo && html !== htmlContent) {
+        setUndoStack(prev => [...prev.slice(-19), htmlContent]);
+        setRedoStack([]);
+  
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) {
+          let el = sel.getRangeAt(0).commonAncestorContainer;
+          while (el && el.nodeName !== 'DIV') el = el.parentNode;
+          if (el && el.getAttribute) {
+            const idx = parseInt(el.getAttribute('data-line-index') || '0');
+            markLineAsModified(idx);
+            performInstantClassification(el);
+          }
+        }
+      }
+  
+      setHtmlContent(html);
+  
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        let el = sel.getRangeAt(0).commonAncestorContainer;
+        while (el && el.nodeName !== 'DIV') el = el.parentNode;
+        if (el && el.className) {
+          const fmt = screenplayFormats.map(f => f.id).find(cls => el.className.includes(cls));
+          setCurrentFormat(fmt || 'action');
+        } else {
+          setCurrentFormat('action');
+        }
+      }
+  
+      calculateStats();
+    }, [htmlContent, screenplayFormats, calculateStats]);
+  
+    const applyFormatToCurrentLine = (formatType, styleOverride = {}) => {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      let el = sel.getRangeAt(0).commonAncestorContainer;
+      while (el && el.nodeName !== 'DIV') el = el.parentNode;
+  
+      if (!el || el.nodeName !== 'DIV') {
+        const range = sel.getRangeAt(0);
+        const div = document.createElement('div');
+        try {
+          range.surroundContents(div);
+          el = div;
+        } catch {
+          const txt = range.toString();
+          range.deleteContents();
+          div.textContent = txt || ' ';
+          range.insertNode(div);
+          el = div;
+        }
+      }
+  
+      if (el) {
+        el.className = formatType;
+        Object.assign(el.style, getFormatStyles(formatType), styleOverride);
+        setCurrentFormat(formatType);
+        updateContent();
+      }
+    };
+  
+    function formatText(command, value = null) {
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      const selected = range.toString();
+      if (!selected) return;
+      let element;
+      switch (command) {
+        case 'bold': element = document.createElement('strong'); break;
+        case 'italic': element = document.createElement('em'); break;
+        case 'underline': element = document.createElement('u'); break;
+        case 'foreColor': element = document.createElement('span'); element.style.color = value; break;
+        default: return;
+      }
+      try {
+        range.deleteContents();
+        element.textContent = selected;
+        range.insertNode(element);
+        const newRange = document.createRange();
+        newRange.setStartAfter(element);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } catch (err) {
+        console.error('formatText error:', err);
+      }
+      updateContent();
+    }
+  
+    // ==================== الكتابة الفورية (Enter فقط) ====================
+    const handleBeforeInput = useCallback(async (e) => {
+      // نتعامل فقط مع إدراج فقرة جديدة (Enter) ونتجاهل باقي الأنواع
+      if (e.inputType !== 'insertParagraph') return;
+      e.preventDefault();
+  
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+  
+      const nextFormat = getNextFormatOnEnter(currentFormat);
+      const marginTop = getMarginTop(currentFormat, nextFormat);
+  
+      // إن احتجنا سطرًا فارغًا قبل السطر الجديد
+      if (needsEmptyLine(currentFormat, nextFormat)) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'action';
+        emptyDiv.innerHTML = '<br>';
+        emptyDiv.style.minHeight = '1.6em';
+  
+        range.deleteContents();
+        range.insertNode(emptyDiv);
+  
+        const afterEmpty = document.createRange();
+        afterEmpty.setStartAfter(emptyDiv);
+        afterEmpty.collapse(true);
+  
+        const newDiv = document.createElement('div');
+        newDiv.innerHTML = '<br>';
+        afterEmpty.insertNode(newDiv);
+  
+        const cursor = document.createRange();
+        cursor.setStart(newDiv, 0);
+        cursor.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(cursor);
+      } else {
+        const newDiv = document.createElement('div');
+        newDiv.innerHTML = '<br>';
+        range.deleteContents();
+        range.insertNode(newDiv);
+  
+        const cursor = document.createRange();
+        cursor.setStart(newDiv, 0);
+        cursor.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(cursor);
+      }
+  
+      // طبّق التنسيق المبدئي
+      applyFormatToCurrentLine(nextFormat, { marginTop });
+  
+      // بعد إنشاء السطر، صنّفه بذكاء (مثل handlePaste)
+      setTimeout(async () => {
+        const sel2 = window.getSelection();
+        if (!sel2.rangeCount) return;
+        let el = sel2.getRangeAt(0).commonAncestorContainer;
+        while (el && el.nodeName !== 'DIV') el = el.parentNode;
+        if (!el) return;
+  
+        Object.assign(el.style, getFormatStyles(el.className));
+  
+        const content = el.textContent?.trim() || '';
+        if (content) {
+          const prevEl = el.previousElementSibling;
+          const prevFmt = prevEl?.className || 'action';
+          try {
+            const result = await classifyLineWithAgents(content, {
+              previousFormat: prevFmt,
+              position: 'enter',
+              isTyping: true
+            });
+            const suggested = result.classification;
+            if (suggested !== el.className) {
+              el.className = suggested;
+              Object.assign(el.style, getFormatStyles(suggested));
+              setCurrentFormat(suggested);
+              if (suggested === 'character' && !content.endsWith(':') && !content.endsWith('：')) {
+                el.textContent = content + ' :';
+              }
+            }
+            if (ENABLE_GEMINI_AUDIT && result.confidence < 0.8) {
+              queueForGeminiReview(el, content, suggested);
+            }
+          } catch (err) {
+            console.error('[EnterClassification] Error:', err);
+          }
+        }
+      }, 100);
+  
+      updateContent();
+    }, [currentFormat, getFormatStyles, updateContent]);
+  
+    // احتياطي للمتصفحات التي لا تدعم beforeinput
+    const keydownFallback = useCallback((e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const fakeEvt = { inputType: 'insertParagraph', preventDefault: () => { } };
+        handleBeforeInput(fakeEvt);
+      }
+    }, [handleBeforeInput]);
+  
+    // ==================== التصنيف الفوري للسطر ===================
+    const performInstantClassification = async (element) => {
+      if (!element || !element.textContent) return;
+      const content = element.textContent.trim();
+      if (content.length < 2) return;
+  
+      try {
+        const prev = element.previousElementSibling?.className || 'action';
+        let newFmt = classifyLineInstantly(content, prev);
+  
+        if (localClassifier && content.length > 4) {
+          try {
+            const localRes = await classifyWithLocalAI(content, { previousFormat: prev, position: 'live-typing', isInstant: true });
+            if (localRes && localRes.confidence > 0.7) newFmt = localRes.classification;
+          } catch { /* ignore */ }
+        }
+  
+        if (useAgentSystem && content.length > 8 && newFmt === 'action') {
+          try {
+            const gemRes = await classifyLineWithAgents(content, { previousFormat: prev, position: 'live-typing', isInstant: true });
+            if (gemRes && gemRes.confidence > 0.8) newFmt = gemRes.classification;
+          } catch { /* ignore */ }
+        }
+  
+        if (newFmt && newFmt !== element.className) {
+          element.className = newFmt;
+          Object.assign(element.style, getFormatStyles(newFmt));
+          setCurrentFormat(newFmt);
+        }
+      } catch (err) {
+        console.error('[InstantClassification] Error:', err);
+      }
+    };
+  
+    // مصنف فوري بسيط
+    const classifyLineInstantly = (text, previousFormat) => {
+      if (!text || text.length < 2) return 'action';
+      const trimmed = text.trim();
+      if (/^[^\s:]{1,15}:/.test(trimmed)) return 'character';
+      if (/^(مشهد|scene|الفصل|chapter)/i.test(trimmed)) return 'scene-header-1';
+      if (/^(داخلي|خارجي|ليل|نهار|صباح|مساء|interior|exterior)/i.test(trimmed)) return 'scene-header-2';
+      if (/^(البيت|المدرسة|المكتب|الشارع|المستشفى|الغرفة)/i.test(trimmed)) return 'scene-header-3';
+      if (/^(قطع|اختفاء|انتقال|cut|fade)/i.test(trimmed) && trimmed.length < 20) return 'transition';
+      if (/^(أنا|أنت|نعم|لا|ربما|آه|أوه)/.test(trimmed)) return 'dialogue';
+      if (/[؟!]$/.test(trimmed)) return 'dialogue';
+      if (/^(يدخل|يخرج|يجلس|يقوم|يمشي|نرى|نشاهد)/.test(trimmed)) return 'action';
+      if (previousFormat === 'character') return 'dialogue';
+      if (previousFormat === 'dialogue' && /^(هو|هي|الرجل|المرأة)/.test(trimmed)) return 'action';
+      return 'action';
+    };
+  
+    // تهيئة الذكاء المحلي
+    const initializeLocalAI = useCallback(async () => {
+      if (localClassifier || isLoadingLocalAI) return;
+      try {
+        setIsLoadingLocalAI(true);
+        const classifier = await pipeline('text-classification', 'Xenova/distilbert-base-uncased', {
+          device: 'webgpu',
+          dtype: 'fp16'
+        });
+        setLocalClassifier(classifier);
+      } catch (err) {
+        console.warn('[LocalAI] WebGPU failed, fallback to WASM:', err);
+        try {
+          const classifier = await pipeline('text-classification', 'Xenova/distilbert-base-uncased', { device: 'wasm' });
+          setLocalClassifier(classifier);
+        } catch (wasmErr) {
+          console.error('[LocalAI] Failed to init local AI:', wasmErr);
+        }
+      } finally {
+        setIsLoadingLocalAI(false);
+      }
+    }, [localClassifier, isLoadingLocalAI]);
+  
+    const classifyWithLocalAI = async (text, context = {}) => {
+      if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        return { classification: 'action', confidence: 0.5, source: 'default-fallback' };
+      }
+      if (!localClassifier) return classifyLineInstantly(text, context.previousFormat);
+      try {
+        const enriched = `Previous: ${context.previousFormat || 'none'}. Text: ${text.trim()}`;
+        const result = await localClassifier(enriched);
+        const conf = result[0]?.score || 0.5;
+        const mapped = mapModelOutputToFormat(result, text, context);
+        return { classification: mapped, confidence: conf, source: 'local-ai' };
+      } catch (err) {
+        console.error('[LocalAI] Error:', err);
+        return { classification: classifyLineInstantly(text, context.previousFormat), confidence: 0.6, source: 'fallback' };
+      }
+    };
+  
+    const mapModelOutputToFormat = (modelResult, text, context) => {
+      const base = classifyLineInstantly(text, context.previousFormat);
+      if (modelResult[0]?.score > 0.8) {
+        const label = modelResult[0].label.toLowerCase();
+        if (label.includes('dialogue') || label.includes('conversation')) return 'dialogue';
+        if (label.includes('action') || label.includes('description')) return 'action';
+      }
+      if (['character', 'scene-header-1', 'scene-header-2', 'scene-header-3', 'transition'].includes(base)) return base;
+      return base;
+    };
+  
+    // تهيئة جيمني
+    const initializeGeminiSystem = useCallback(() => {
+      if (!geminiCoordinator.current) {
+        geminiCoordinator.current = new GeminiCoordinator();
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (apiKey) {
+          const ok = geminiCoordinator.current.setApiKey(apiKey);
+          if (!ok) console.error('[Gemini] Failed to set API key');
+        } else {
+          console.warn('[Gemini] No API key found');
+        }
+      }
+    }, []);
+  
+    const classifyLineWithAgents = async (text, context = {}) => {
+      if (!geminiCoordinator.current) {
+        console.warn('[Gemini] Coordinator not initialized');
+        return { classification: classifyLineInstantly(text, context.previousFormat), confidence: 0.6, source: 'fallback' };
+      }
+      try {
+        const result = await geminiCoordinator.current.classifyWithAgents(text, context);
+        setAgentSystemStats(p => ({
+          ...p,
+          totalClassifications: p.totalClassifications + 1,
+          coordinatorDecisions: p.coordinatorDecisions + 1,
+          totalApiCalls: p.totalApiCalls + 1,
+          averageConfidence: (p.averageConfidence * p.totalClassifications + result.confidence) / (p.totalClassifications + 1)
+        }));
+        return result;
+      } catch (err) {
+        console.error('[Gemini] classify error:', err);
+        return { classification: classifyLineInstantly(text, context.previousFormat), confidence: 0.5, source: 'error-fallback' };
+      }
+    };
+  
+    // مراجعة جيمني
+    async function auditWithGemini(batch) {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) throw new Error('Missing Gemini API key');
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const prompt = buildAuditPrompt(batch);
+      try {
+        const resp = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: 'application/json' }
+          })
+        });
+        if (!resp.ok) {
+          const errTxt = await resp.text();
+          console.error('Gemini API Error:', resp.status, errTxt);
+          return [];
+        }
+        const data = await resp.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+        let corrections = JSON.parse(rawText);
+        if (!Array.isArray(corrections)) return [];
+        const allowed = new Set(screenplayFormats.map(f => f.id));
+        return corrections.filter(c => typeof c?.index === 'number' && allowed.has(c?.suggestedClass));
+      } catch (err) {
+        console.error('Gemini audit exception:', err);
+        return [];
+      }
+    }
+  
+    // طابور مراجعة جيمني
+    const queueForGeminiReview = (element, content, format) => {
+      const item = {
+        element,
+        content: content.trim(),
+        format,
+        timestamp: Date.now(),
+        lineIndex: element.getAttribute('data-line-index')
+      };
+      reviewQueueRef.current.push(item);
+      if (reviewTimeoutRef.current) clearTimeout(reviewTimeoutRef.current);
+      reviewTimeoutRef.current = setTimeout(processReviewQueue, 2000);
+    };
+  
+    const processReviewQueue = async () => {
+      if (reviewQueueRef.current.length === 0) return;
+      const items = [...reviewQueueRef.current];
+      reviewQueueRef.current = [];
+      const batch = items.map(it => ({ index: parseInt(it.lineIndex || '0'), raw: it.content, cls: it.format }));
+      try {
+        setIsAuditing(true);
+        const corrections = await auditWithGemini(batch);
+        if (corrections.length > 0) {
+          const map = new Map(corrections.map(c => [c.index, c.suggestedClass]));
+          items.forEach(it => {
+            const idx = parseInt(it.lineIndex || '0');
+            if (map.has(idx) && it.element.parentNode) {
+              const newCls = map.get(idx);
+              if (it.element.className !== newCls) {
+                it.element.className = newCls;
+                Object.assign(it.element.style, getFormatStyles(newCls));
+  
+                // إذا كان السطر مصنّف حاليًا، حدّث الحالة
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) {
+                  let cur = sel.getRangeAt(0).commonAncestorContainer;
+                  while (cur && cur.nodeName !== 'DIV') cur = cur.parentNode;
+                  if (cur === it.element) setCurrentFormat(newCls);
+                }
+              }
+            }
+          });
+          updateContent(false);
+        }
+      } catch (err) {
+        console.error('[SmartReview] error:', err);
+      } finally {
+        setIsAuditing(false);
+      }
+    };
+  
+    // المدقق الخلفي
+    const startBackgroundAuditor = () => {
+      if (backgroundAuditorRef.current) clearInterval(backgroundAuditorRef.current);
+      backgroundAuditorRef.current = setInterval(async () => {
+        if (!ENABLE_GEMINI_AUDIT || isAuditing || !editorRef.current) return;
+        const now = Date.now();
+        if (now - lastAuditTimeRef.current < 10000) return; // 10 ثوانٍ
+  
+        const allDivs = Array.from(editorRef.current.children);
+        const recent = [];
+        allDivs.forEach((div, idx) => {
+          const lineIndex = parseInt(div.getAttribute('data-line-index') || '0');
+          const content = div.textContent?.trim();
+          if (content && (
+            idx >= allDivs.length - 10 ||
+            lastModifiedLines.has(lineIndex) ||
+            now - (div.dataset.lastModified || 0) < 60000
+          )) {
+            recent.push({ index: lineIndex, raw: content, cls: div.className || 'action', element: div });
+          }
+        });
+  
+        if (recent.length === 0) return;
+  
+        try {
+          setIsAuditing(true);
+          const corrections = await auditWithGemini(recent);
+          if (corrections.length > 0) {
+            const map = new Map(corrections.map(c => [c.index, c.suggestedClass]));
+            recent.forEach(item => {
+              if (map.has(item.index) && item.element.parentNode) {
+                const newCls = map.get(item.index);
+                if (item.element.className !== newCls) {
+                  item.element.className = newCls;
+                  Object.assign(item.element.style, getFormatStyles(newCls));
+                  item.element.style.transition = 'background-color 0.3s ease';
+                  item.element.style.backgroundColor = isDarkMode ? '#065f46' : '#dcfce7';
+                  setTimeout(() => {
+                    item.element.style.backgroundColor = '';
+                    setTimeout(() => { item.element.style.transition = ''; }, 300);
+                  }, 1500);
+                }
+              }
+            });
+            setLastModifiedLines(new Set());
+            updateContent(false);
+          }
+          lastAuditTimeRef.current = now;
+        } catch (err) {
+          console.error('[BackgroundAuditor] error:', err);
+        } finally {
+          setIsAuditing(false);
+        }
+      }, 15000);
+    };
+  
+    const stopBackgroundAuditor = () => {
+      if (backgroundAuditorRef.current) {
+        clearInterval(backgroundAuditorRef.current);
+        backgroundAuditorRef.current = null;
+      }
+    };
+  
+    // تعليم السطر على أنه معدّل
+    const markLineAsModified = (lineIndex) => {
+      setLastModifiedLines(prev => new Set([...prev, lineIndex]));
+      if (editorRef.current) {
+        const divs = editorRef.current.children;
+        for (let div of divs) {
+          if (parseInt(div.getAttribute('data-line-index') || '0') === lineIndex) {
+            div.dataset.lastModified = Date.now().toString();
+            break;
+          }
+        }
+      }
+    };
+  
+    // ==================== لصق النص (Paste) =====================
+    const handlePaste = async (e) => {
+      e.preventDefault();
+      const textData = e.clipboardData.getData('text/plain');
+      if (!textData) return;
+  
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+  
+      const lines = textData.split('\n');
+      const { processed } = await classifyLinesPipeline(lines, currentFormat, useAgentSystem, e.isPDFSource, 'paste');
+  
+      const { html, batchLinesForAudit } = insertProcessedIntoDOM(processed);
+  
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const fragment = range.createContextualFragment(html);
+      const lastNode = fragment.lastChild;
+      range.insertNode(fragment);
+  
+      if (lastNode) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(lastNode);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+  
+      updateContent();
+      await auditAndApplyCorrections(batchLinesForAudit);
+    };
+  
+    // ==================== استيراد الملفات =====================
+    const handleFileImport = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        setIsImporting(true);
+        createNewDocument();
+        let text = '';
+  
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          try {
+            await handleAdvancedPDFImport(file);
+            setIsImporting(false);
+            return;
+          } catch (err) {
+            console.warn('[FileImport] OCR failed, fallback to basic reader', err);
+            text = await fileReaderService.extractTextFromFile(file);
+          }
+        } else {
+          text = await fileReaderService.extractTextFromFile(file);
+        }
+  
+        const dt = new DataTransfer();
+        dt.setData('text/plain', text);
+        setTimeout(() => {
+          handlePaste({ preventDefault: () => { }, clipboardData: dt, isPDFSource: false });
+          setIsImporting(false);
+        }, 0);
+      } catch (err) {
+        console.error('File import error:', err);
+        setIsImporting(false);
+        alert(`فشل استيراد الملف: ${err.message || err}`);
+      } finally {
+        e.target.value = '';
+      }
+    };
+  
+  \\
+  
+  // ==================== PDF OCR المسار المتقدم =====================
+  
+  const handleAdvancedPDFImport = async (pdfFile) => {
+  
+    setIsImporting(true);
+  
+    let extractedText = null;
+  
+  \\
+  
+  // يمكن إعادة تفعيل Scribe.js لاحقًا
+  
+  // try { const scribeLib = await loadScribe(); if (scribeLib) { ... } } catch {}
+  
+  \\
+  
+  // استخدام PDF.js + Tesseract.js
+  
+  if (!extractedText) {
+  
+    extractedText = await processPDFWithTesseract(pdfFile);
+  
+  }
+  
+  if (!extractedText) throw new Error('All OCR methods failed');
+  
+  \\
+  
+  const processedText = await smartProcessPDFText(extractedText);
+  
+  const dt = new DataTransfer();
+  
+  dt.setData('text/plain', processedText);
+  
+  ```
+  await handlePaste({
+    preventDefault: () => {},
+    clipboardData: dt,
+    isPDFSource: true
+  });
+  
+  setIsImporting(false);
+  return;
+  ```
+  
+  } catch (error) {
+    console.error('\[AdvancedPDFImport] Error:', error);
+    alert('فشل استيراد ملف PDF (OCR): ' + (error?.message || error));
+  } finally {
+    setIsImporting(false);
+  }
+  };
+
+// Source: src/js/monaco.js
+export function setEditorContent(content) {
+    if (editorInstance) {
+        editorInstance.setValue(content);
+    }
+}
+
+// Source: download (18)/src/components/screenplay-editor.tsx
+const splitLines = (text: string) => {
+        return text.replace(/\r\n/g, '\n').split('\n');
+    };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const startBackgroundAuditor = () => {
+      if (backgroundAuditorRef.current) clearInterval(backgroundAuditorRef.current);
+      backgroundAuditorRef.current = setInterval(async () => {
+        if (!ENABLE_GEMINI_AUDIT || isAuditing || !editorRef.current) return;
+        const now = Date.now();
+        if (now - lastAuditTimeRef.current < 10000) return; // 10 ثوانٍ
+  
+        const allDivs = Array.from(editorRef.current.children);
+        const recent = [];
+        allDivs.forEach((div, idx) => {
+          const lineIndex = parseInt(div.getAttribute('data-line-index') || '0');
+          const content = div.textContent?.trim();
+          if (content && (
+            idx >= allDivs.length - 10 ||
+            lastModifiedLines.has(lineIndex) ||
+            now - (div.dataset.lastModified || 0) < 60000
+          )) {
+            recent.push({ index: lineIndex, raw: content, cls: div.className || 'action', element: div });
+          }
+        });
+  
+        if (recent.length === 0) return;
+  
+        try {
+          setIsAuditing(true);
+          const corrections = await auditWithGemini(recent);
+          if (corrections.length > 0) {
+            const map = new Map(corrections.map(c => [c.index, c.suggestedClass]));
+            recent.forEach(item => {
+              if (map.has(item.index) && item.element.parentNode) {
+                const newCls = map.get(item.index);
+                if (item.element.className !== newCls) {
+                  item.element.className = newCls;
+                  Object.assign(item.element.style, getFormatStyles(newCls));
+                  item.element.style.transition = 'background-color 0.3s ease';
+                  item.element.style.backgroundColor = isDarkMode ? '#065f46' : '#dcfce7';
+                  setTimeout(() => {
+                    item.element.style.backgroundColor = '';
+                    setTimeout(() => { item.element.style.transition = ''; }, 300);
+                  }, 1500);
+                }
+              }
+            });
+            setLastModifiedLines(new Set());
+            updateContent(false);
+          }
+          lastAuditTimeRef.current = now;
+        } catch (err) {
+          console.error('[BackgroundAuditor] error:', err);
+        } finally {
+          setIsAuditing(false);
+        }
+      }, 15000);
+    };
+
+// Source: download (11)/src/components/ai/sentiment-analyzer.tsx
+const stopBackgroundAuditor = () => {
+      if (backgroundAuditorRef.current) {
+        clearInterval(backgroundAuditorRef.current);
+        backgroundAuditorRef.current = null;
+      }
+    };
+
+// Source: download (9)/main.js
+const SwarmDialogueDisplay = ({ dialogue, isLoading }) => {
+            if (isLoading && dialogue.length === 0) {
+                return <Loader message="بدء الحوار بين الخبراء..." />;
+            }
+            return (
+                <div className="w-full mt-8 p-6 bg-slate-900/70 rounded-xl shadow-2xl border border-panel-border space-y-6">
+                    <h2 className="text-2xl font-bold text-slate-100 mb-4 border-b-2 border-slate-700 pb-2">حوار السرب التفاعلي</h2>
+                    {dialogue.map((entry, index) => {
+                        const agent = AGENTS[entry.agentId];
+                        return (
+                            <div key={index} className="p-4 bg-slate-800 rounded-lg border border-slate-700">
+                                <h3 className="font-bold text-sky-400">{agent.name}</h3>
+                                <p className="text-xs text-slate-400 mb-2">{agent.description}</p>
+                                <div className="prose prose-sm max-w-none text-slate-300">{entry.text.split('\\n').map((line, i) => <p key={i}>{line}</p>)}</div>
+                            </div>
+                        );
+                    })}
+                    {isLoading && dialogue.length > 0 && (
+                        <div className="flex items-center gap-2 text-slate-400">
+                            <div className="w-4 h-4 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+                            <span>الخبير التالي يفكر...</span>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+// Source: src/hooks/use-toast.ts
+
+function toast({ ...props }: Toast) {
+  const id = genId()
+
+  const update = (props: ToasterToast) =>
+    dispatch({
+      type: "UPDATE_TOAST",
+      toast: { ...props, id },
+    })
+  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  dispatch({
+    type: "ADD_TOAST",
+    toast: {
+      ...props,
+      id,
+      open: true,
+      onOpenChange: (open) => {
+        if (!open) dismiss()
+      },
+    },
+  })
+
+  return {
+    id: id,
+    dismiss,
+    update,
+  }
+}
+
+// Source: src/components/ui/toaster.tsx
+export function Toaster() {
+  const { toasts } = useToast()
+
+  return (
+    <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, ...props }) {
+        return (
+          <Toast key={id} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && (
+                <ToastDescription>{description}</ToastDescription>
+              )}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        )
+      })}
+      <ToastViewport />
+    </ToastProvider>
+  )
+}
+
+// Source: download (15)/src/components/ScreenplayEditor.tsx
+const updateCursorPosition = () => {
+        if (!editorRef.current || !scrollContainerRef.current) return;
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const editorRect = scrollContainerRef.current.getBoundingClientRect();
+            const horizontalPos = rect.left - editorRect.left;
+            setCursorPosition(horizontalPos);
+            const verticalPos = rect.top - editorRect.top + scrollContainerRef.current.scrollTop;
+            setVerticalCursorPosition(verticalPos);
+        }
+    };
+
+// Source: download (18)/src/components/ui/carousel.tsx
+
+function useCarousel() {
+  const context = React.useContext(CarouselContext)
+
+  if (!context) {
+    throw new Error("useCarousel must be used within a <Carousel />")
+  }
+
+  return context
+}
+
+// Source: src/components/ui/chart.tsx
+
+function useChart() {
+  const context = React.useContext(ChartContext)
+
+  if (!context) {
+    throw new Error("useChart must be used within a <ChartContainer />")
+  }
+
+  return context
+}
+
+// Source: src/components/ui/form.tsx
+const useFormField = () => {
+  const fieldContext = React.useContext(FormFieldContext)
+  const itemContext = React.useContext(FormItemContext)
+  const { getFieldState, formState } = useFormContext()
+
+  const fieldState = getFieldState(fieldContext.name, formState)
+
+  if (!fieldContext) {
+    throw new Error("useFormField should be used within <FormField>")
+  }
+
+  const { id } = itemContext
+
+  return {
+    id,
+    name: fieldContext.name,
+    formItemId: `${id}-form-item`,
+    formDescriptionId: `${id}-form-item-description`,
+    formMessageId: `${id}-form-item-message`,
+    ...fieldState,
+  }
+}
+
+
+
+// Source: src/hooks/use-mobile.tsx
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+    const onChange = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    }
+    mql.addEventListener("change", onChange)
+    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
+
+  return !!isMobile
+}
+
+// Source: src/components/ui/sidebar.tsx
+
+function useSidebar() {
+  const context = React.useContext(SidebarContext)
+  if (!context) {
+    throw new Error("useSidebar must be used within a SidebarProvider.")
+  }
+
+  return context
+}
+
+// Source: src/hooks/use-toast.ts
+
+function useToast() {
+  const [state, setState] = React.useState<State>(memoryState)
+
+  React.useEffect(() => {
+    listeners.push(setState)
+    return () => {
+      const index = listeners.indexOf(setState)
+      if (index > -1) {
+        listeners.splice(index, 1)
+      }
+    }
+  }, [state])
+
+  return {
+    ...state,
+    toast,
+    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+  }
+}
+
+// Source: download (17)/src/components/writing-tools-section.tsx
+export function WritingToolsSection() {
+  return (
+    <section id="writing-tools" className="w-full py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
+          <div className="space-y-2">
+            <h2 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-5xl">
+              أدوات كتابة مُحسّنة لتجربة فريدة
+            </h2>
+            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+              عزز إنتاجيتك وإبداعك مع مجموعة من الأدوات المصممة خصيصًا لتلبية احتياجات الكاتب العصري.
+            </p>
+          </div>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:grid-cols-3 lg:gap-12">
+          {features.map((feature, index) => (
+            <Card key={index} className="h-full bg-card/80 backdrop-blur-sm transform hover:-translate-y-2 transition-transform duration-300">
+              <CardHeader className="gap-4">
+                {feature.icon}
+                <div className="space-y-1">
+                  <CardTitle className="font-headline">
+                    {feature.title}
+                  </CardTitle>
+                  <CardDescription>{feature.description}</CardDescription>
+                </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
