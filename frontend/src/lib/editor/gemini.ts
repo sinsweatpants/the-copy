@@ -80,3 +80,16 @@ export const queueForGeminiReview = (
     await process(items);
   }, 2000);
 };
+let auditorId: number | null = null;
+
+export const startBackgroundAuditor = (fn: () => Promise<void>, interval = 10000) => {
+  stopBackgroundAuditor();
+  auditorId = window.setInterval(fn, interval);
+};
+
+export const stopBackgroundAuditor = () => {
+  if (auditorId) {
+    clearInterval(auditorId);
+    auditorId = null;
+  }
+};
