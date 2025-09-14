@@ -60,3 +60,21 @@ export const normalizeSpacing = (
 
   return normalized;
 };
+export const mapModelOutputToFormat = (
+  modelResult: { label: string; score: number }[],
+  text: string,
+  context: { previousFormat: ScreenplayFormat }
+): ScreenplayFormat => {
+  const base = classifyLineInstantly(text, context.previousFormat);
+  const top = modelResult[0];
+  if (top?.score > 0.8) {
+    const label = top.label.toLowerCase();
+    if (label.includes('dialogue') || label.includes('conversation')) return 'dialogue';
+    if (label.includes('action') || label.includes('description')) return 'action';
+  }
+  if (
+    ['character', 'scene-header-1', 'scene-header-2', 'scene-header-3', 'transition'].includes(base)
+  )
+    return base;
+  return base;
+};
