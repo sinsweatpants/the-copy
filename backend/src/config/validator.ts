@@ -23,7 +23,7 @@ const baseSchema = z.object({
   GEMINI_API_KEY: z.string().min(10, "مفتاح GEMINI_API_KEY مفقود"),
 
   // Frontend
-  FRONTEND_ORIGIN: z.string().url(),
+  FRONTEND_ORIGINS: z.string(),
 });
 
 // معالجة الـ flags

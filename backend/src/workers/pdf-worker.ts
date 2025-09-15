@@ -71,6 +71,9 @@ const worker = new Worker('pdf-export-queue', async (job: Job) => {
         return { success: true, title };
 
     } catch (error: any) {
+        if (error.message?.includes("Failed to launch the browser")) {
+        logger.warn({ job: job.id, error: error.message }, "Chromium dependencies missing for Puppeteer");
+    }
         logger.error({ job: job.id, error: error.message }, "PDF export job failed");
         throw error; // This will mark the job as failed
     }

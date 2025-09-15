@@ -1,7 +1,6 @@
 import "./config/load-env.js";
 
 import express from "express";
-import cors from "cors";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
 
@@ -11,6 +10,7 @@ import { fileURLToPath } from "url";
 
 import { Pool } from "pg";
 import { env } from "./config/validator.js";
+import corsMiddleware from "./config/cors.js";
 
 // __dirname في بيئة ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // إعدادات وسطيات أساسية
-app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
+app.use(corsMiddleware);
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 
