@@ -1,45 +1,43 @@
-# Builder stage
-FROM node:18-alpine AS build
+# ===== Builder =====
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install root dependencies
+# Root deps (Workspaces respected if present)
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
-# Install backend dependencies and build
+# Backend build
 COPY backend/package*.json backend/
 COPY backend/tsconfig.json backend/
-RUN cd backend && npm ci --omit=dev
+RUN cd backend && npm ci
 COPY backend backend
 RUN cd backend && npm run build
 
-# Install frontend dependencies and build
-COPY frontend/package.json frontend/
+# Frontend build
+COPY frontend/package*.json frontend/
 COPY frontend/tsconfig.json frontend/
 COPY frontend/vite.config.ts frontend/
 COPY frontend/tailwind.config.js frontend/
 COPY frontend/postcss.config.js frontend/
 COPY frontend/index.html frontend/
 COPY frontend/src frontend/src
-RUN cd frontend && npm run build
+RUN cd frontend && npm ci && npm run build
 
-# Production stage
-FROM node:18-alpine
+# ===== Runtime =====
+FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy built backend and dependencies
-COPY --from=build /app/backend/dist backend/dist
-COPY --from=build /app/backend/node_modules backend/node_modules
-COPY --from=build /app/backend/package.json backend/
+# Backend: production deps only
+COPY backend/package*.json backend/
+RUN cd backend && npm ci --omit=dev
 
-# Copy built frontend
-COPY --from=build /app/frontend/dist frontend/dist
+# Copy build outputs
+COPY --from=builder /app/backend/dist backend/dist
+COPY --from=builder /app/frontend/dist frontend/dist
 
-# Create a non-root user
-RUN addgroup -S app && adduser -S app -G app
-# chown the app directory
-RUN chown -R app:app /app
+# Non-root user
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
 EXPOSE 4000

@@ -1,9 +1,10 @@
 # Deployment
 
 ## Frontend (Firebase Hosting SPA)
-1. Install CLI: `npm i -g firebase-tools`
-2. Build frontend: `npm run -w frontend build`
-3. Deploy: `firebase deploy --only hosting`
+1. Configure `.firebaserc` with your Firebase project ID.
+2. Install CLI: `npm i -g firebase-tools`
+3. Build frontend: `npm run -w frontend build`
+4. Deploy: `firebase deploy --only hosting`
 
 `VITE_API_BASE` must point to the external API base URL.
 

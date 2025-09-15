@@ -1,7 +1,3 @@
 {
-  "projects": {
-    "default": "acttt-468110"
-  },
-  "targets": {},
-  "etags": {}
+  "projects": { "default": "YOUR_FIREBASE_PROJECT_ID" }
 }
