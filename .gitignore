@@ -17,6 +17,7 @@ build/
 .env.local
 .env.development
 .env.production
+**/.env*
 
 # Database
 *.sqlite
@@ -73,3 +74,8 @@ temp/
 backend/src/dataconnect-generated/
 frontend/src/dataconnect-generated/
 src/dataconnect-generated/
+
+# Secrets and binaries
+.firebase/logs/
+*.vsix
+backend/trufflehog

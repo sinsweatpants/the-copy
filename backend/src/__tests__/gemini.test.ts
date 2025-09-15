@@ -10,7 +10,7 @@ beforeAll(async () => {
   process.env.REFRESH_TOKEN_SECRET = 'DUMMY_REFRESH_SECRET';
   process.env.GEMINI_API_KEY = 'DUMMY_API_KEY';
   process.env.REDIS_URL = 'redis://localhost:6379';
-  process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
+  process.env.FRONTEND_ORIGINS = 'http://localhost:5173';
   app = (await import('../server')).default;
 });
 

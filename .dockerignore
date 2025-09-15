@@ -9,3 +9,8 @@ build
 *.sqlite
 .env*
 coverage
+**/.env*
+*.log
+.firebase/logs/
+*.vsix
+backend/trufflehog
