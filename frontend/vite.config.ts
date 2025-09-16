@@ -1,8 +1,38 @@
 // filepath: frontend/vite.config.ts
 /// <reference types="vitest" />
 import path from "node:path";
+import { createRequire } from "node:module";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+const require = createRequire(import.meta.url);
+
+const tiptapDeps = [
+  "@tiptap/react",
+  "@tiptap/starter-kit",
+  "@tiptap/extension-link",
+  "@tiptap/extension-bold",
+  "prosemirror-model",
+  "prosemirror-state",
+  "prosemirror-view",
+].filter((dep) => {
+  try {
+    require.resolve(dep);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+const manualChunks: Record<string, string[]> = {
+  react: ["react", "react-dom"],
+  pdf: ["pdfjs-dist"],
+  icons: ["lucide-react"],
+};
+
+if (tiptapDeps.length > 0) {
+  manualChunks.tiptap = tiptapDeps;
+}
 
 export default defineConfig({
   plugins: [react()],
@@ -25,20 +55,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom"],
-          tiptap: [
-            "@tiptap/react",
-            "@tiptap/starter-kit",
-            "@tiptap/extension-link",
-            "@tiptap/extension-bold",
-            "prosemirror-model",
-            "prosemirror-state",
-            "prosemirror-view",
-          ],
-          pdf: ["pdfjs-dist"],
-          icons: ["lucide-react"],
-        },
+        manualChunks,
       },
     },
     // رفع الحد بشكل كافي يمنع التحذير
