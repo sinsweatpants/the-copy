@@ -2,6 +2,13 @@ import { Worker, Job } from 'bullmq';
 import puppeteer from 'puppeteer';
 import logger from '../logger/enhanced-logger.js';
 
+export async function launchPdfBrowser() {
+  return puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+}
+
 const connection = {
     url: process.env.REDIS_URL,
 };
@@ -11,10 +18,7 @@ const worker = new Worker('pdf-export-queue', async (job: Job) => {
     logger.info({ job: job.id, userId }, "Processing PDF export job");
 
     try {
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        const browser = await launchPdfBrowser();
         const page = await browser.newPage();
 
         const style = `
