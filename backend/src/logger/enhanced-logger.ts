@@ -5,7 +5,17 @@ import type { Request, Response } from 'express';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  redact: ['req.headers.authorization', 'req.body.password', 'req.body.token'],
+  redact: [
+    'req.headers.authorization',
+    'req.headers.cookie',
+    'req.headers.x-api-key',
+    'res.headers.set-cookie',
+    'req.query.apiKey',
+    'req.query.token',
+    'req.body.password',
+    'req.body.token',
+    'req.body.secret',
+  ],
 });
 
 export const httpLogger = pinoHttp({

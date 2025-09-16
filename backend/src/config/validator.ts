@@ -24,6 +24,7 @@ const baseSchema = z.object({
 
   // Frontend
   FRONTEND_ORIGINS: z.string(),
+  EXTERNAL_API_BASE: z.string().optional(),
 });
 
 // معالجة الـ flags
