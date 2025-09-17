@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -167,4 +167,24 @@ pub struct ClassifiedLine {
     #[serde(rename = "sceneData")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene_data: Option<SceneData>,
+}
+
+/// A rendering job describing which screenplay fragment should be processed by the worker.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RenderJob {
+    /// Unique identifier of the job.
+    pub id: String,
+    /// Human readable label for logging purposes.
+    pub label: String,
+    /// Raw HTML payload that will be processed by the worker.
+    pub html: String,
+}
+
+/// The normalized outcome of processing a [`RenderJob`] containing a simplified text representation of the original HTML.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RenderedJob {
+    /// Identifier of the originating job.
+    pub id: String,
+    /// Simplified textual representation extracted from the HTML payload.
+    pub text_content: String,
 }
