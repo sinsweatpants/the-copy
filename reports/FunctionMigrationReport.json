@@ -1,0 +1,46 @@
+{
+  "from_file": "collated_functions.txt",
+  "functions_total": 76,
+  "functions_transferred": 20,
+  "untransferred": [
+    "addToRemoveQueue","AiFeatureSection","onSubmit","applyFormatToCurrentLine","ArabicQuillPage","calculateStats","Calendar","ChartStyle","closeAllMenus","createNewDocument","dispatch","FeaturesSection","Footer","formatText","genId","getEditorContent","getPayloadConfigFromPayload","handleClickOutside","handleSend","Header","handleSignIn","handleSignOut","HeroSection","Home","initMonaco","loadSampleText","Logo","markLineAsModified","MenubarGroup","MenubarMenu","MenubarPortal","MenubarRadioGroup","MenubarShortcut","MenubarSub","normalizeExistingContent","content","onChange","ProductionFeaturesSection","renderContent","renderMarkdown","ResultsDisplay","RootLayout","setEditorContent","splitLines","SwarmDialogueDisplay","update","dismiss","Toaster","updateCursorPosition","useCarousel","useChart","useFormField","useIsMobile","useSidebar","useToast","WritingToolsSection"
+  ],
+  "duplicates": {
+    "applyFormatToCurrentLine": [144, 174, 1801],
+    "auditWithGemini": [244, 2101],
+    "classifyLineInstantly": [435, 1998],
+    "formatText": [598, 1830],
+    "getMarginTop": [634, 1554],
+    "insertProcessedIntoDOM": [920, 1706],
+    "mapModelOutputToFormat": [1003, 2054],
+    "markLineAsModified": [1015, 2247],
+    "needsEmptyLine": [1086, 1579],
+    "normalizeSpacing": [1219, 1677],
+    "queueForGeminiReview": [1287, 2133],
+    "startBackgroundAuditor": [2184, 2397],
+    "stopBackgroundAuditor": [2239, 2453]
+  },
+  "rename_map": {},
+  "file_map": {
+    "classifyLineInstantly": "frontend/src/lib/editor/format.ts",
+    "getNextFormatOnEnter": "frontend/src/lib/editor/format.ts",
+    "normalizeSpacing": "frontend/src/lib/editor/format.ts",
+    "needsEmptyLine": "frontend/src/lib/editor/format.ts",
+    "getMarginTop": "frontend/src/lib/editor/format.ts",
+    "mapModelOutputToFormat": "frontend/src/lib/editor/format.ts",
+    "getClipboardText": "frontend/src/lib/editor/dom.ts",
+    "insertProcessedIntoDOM": "frontend/src/lib/editor/dom.ts",
+    "insertFragment": "frontend/src/lib/editor/dom.ts",
+    "buildAuditPrompt": "frontend/src/lib/editor/gemini.ts",
+    "auditWithGemini": "frontend/src/lib/editor/gemini.ts",
+    "queueForGeminiReview": "frontend/src/lib/editor/gemini.ts",
+    "startBackgroundAuditor": "frontend/src/lib/editor/gemini.ts",
+    "stopBackgroundAuditor": "frontend/src/lib/editor/gemini.ts"
+  },
+  "tests_added": [
+    "frontend/src/lib/editor/__tests__/format.test.ts",
+    "frontend/src/lib/editor/__tests__/dom.test.ts",
+    "frontend/src/lib/editor/__tests__/gemini.test.ts"
+  ],
+  "notes": "mapModelOutputToFormat and background auditor functions implemented; other collated utilities deferred."
+}
