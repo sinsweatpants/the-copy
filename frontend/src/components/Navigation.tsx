@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Edit3, BarChart3, Bot, FileText } from 'lucide-react';
+import { Home, Edit3, BarChart3, Bot, FileText, Database } from 'lucide-react';
 
-type CurrentPage = 'home' | 'editor' | 'analyzer' | 'ai-agents' | 'text-analysis';
+type CurrentPage = 'home' | 'editor' | 'analyzer' | 'ai-agents' | 'text-analysis' | 'firebase-test';
 
 interface NavigationProps {
   currentPage: CurrentPage;
@@ -39,6 +39,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate }) => {
       label: 'تحليل النصوص', 
       icon: FileText,
       color: 'text-green-600 hover:text-green-700'
+    },
+    { 
+      id: 'firebase-test' as CurrentPage, 
+      label: 'اختبار Firebase', 
+      icon: Database,
+      color: 'text-orange-600 hover:text-orange-700'
     }
   ];
 
@@ -48,10 +54,31 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate }) => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <div className="flex items-center">
-            <div className="relative">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent hover:scale-105 transition-transform duration-300">
-                the-copy
-              </h1>
+            <div className="relative" dir="rtl">
+              <div className="flex items-center space-x-6">
+                <div className="flex flex-col items-center">
+                  <h1 
+                    className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent hover:scale-105 transition-transform duration-300"
+                    dir="rtl"
+                  >
+                    النسخة -
+                  </h1>
+                  <p className="text-xs text-gray-400 font-medium mt-1 text-center">
+                    بس اصلي
+                  </p>
+                </div>
+                <div className="flex flex-col items-center">
+                  <h1 
+                    className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent hover:scale-105 transition-transform duration-300"
+                    dir="ltr"
+                  >
+                    the copy
+                  </h1>
+                  <p className="text-xs text-gray-400 font-medium mt-1 text-center">
+                    Because Originals Know What to Copy.
+                  </p>
+                </div>
+              </div>
               <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
             </div>
           </div>

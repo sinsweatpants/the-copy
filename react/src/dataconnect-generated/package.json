@@ -1,5 +1,5 @@
 {
-  "name": "@dataconnect/generated-react",
+  "name": "@dataconnect/generated",
   "version": "1.0.0",
   "author": "Firebase <firebase-support@google.com> (https://firebase.google.com/)",
   "description": "Generated SDK For example",
@@ -8,13 +8,18 @@
     "node": " >=18.0"
   },
   "typings": "index.d.ts",
-  "main": "index.cjs.js",
   "module": "esm/index.esm.js",
+  "main": "index.cjs.js",
   "browser": "esm/index.esm.js",
-  "peerDependencies": {
-    "@tanstack-query-firebase/react": "^2.0.0"
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.cjs.js",
+      "default": "./esm/index.esm.js"
+    },
+    "./package.json": "./package.json"
   },
-  "dependencies": {
-    "@dataconnect/generated": "file:src/dataconnect-generated"
+  "peerDependencies": {
+    "firebase": "^10.14.0 || ^11.3.0 || ^12.0.0"
   }
 }

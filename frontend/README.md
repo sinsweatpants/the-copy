@@ -34,6 +34,33 @@ npm install
 npm run dev
 ```
 
+## 🔥 Firebase Integration
+
+This project includes Firebase integration with the following services:
+
+- **Firebase Authentication** - User authentication
+- **Firebase Firestore** - NoSQL database
+- **Firebase Storage** - File storage
+- **Firebase Analytics** - Analytics tracking
+
+### Firebase Configuration
+
+Firebase is configured with the following settings:
+
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSyBkeea3ffQjhQ6xlnRAXC38kdG7trXvmZc",
+  authDomain: "adam-468522.firebaseapp.com",
+  projectId: "adam-468522",
+  storageBucket: "adam-468522.firebasestorage.app",
+  messagingSenderId: "781031989535",
+  appId: "1:781031989535:web:a67d962d7c8bcb3cc2d02a",
+  measurementId: "G-W24SMTG90M"
+};
+```
+
+For more details about Firebase setup and usage, see [Firebase Setup Guide](docs/Firebase-Setup-Guide.md).
+
 ## 📖 كيفية الاستخدام
 
 ### 1. إنشاء سيناريو جديد
@@ -73,6 +100,7 @@ npm run dev
 - **Tailwind CSS** - للتصميم والأنماط
 - **Lucide React** - للأيقونات
 - **Vite** - لأدوات البناء السريعة
+- **Firebase** - للخدمات السحابية
 
 ### بنية الملفات
 ```

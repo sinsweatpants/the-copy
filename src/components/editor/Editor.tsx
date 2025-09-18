@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, Fragment } from 'react';
 import {
-  Sparkles, Check, X, Loader2, Sun, Moon, Copy, FileText,
-  Bold, Italic, Underline, Link, AlignLeft, AlignCenter,
-  AlignRight, List, ListOrdered, IndentDecrease, IndentIncrease,
-  Palette, MoveVertical, Type, Highlighter, MoreHorizontal,
-  Search, Replace, Save, FolderOpen, Printer, Eye, Settings,
-  Play, Pause, RotateCcw, RotateCw, Download, Upload, Share2,
-  FilePlus, Undo, Redo, Scissors, Pilcrow, Image as ImageIcon,
-  Table, Minus, ChevronsRight, Pencil, ChevronDown,
+  Sparkles, X, Sun, Moon, Copy, FileText,
+  Bold, Italic, Underline, AlignLeft, AlignCenter,
+  AlignRight,
+  Palette,
+  Search, Replace, Save, FolderOpen, Printer, Eye,
+  Download, Upload,
+  FilePlus, Undo, Redo, Scissors, ChevronDown, ChevronsRight, Pencil,
   BookHeart, Film, MapPin, Camera, Feather, UserSquare,
   Parentheses, MessageCircle, FastForward
 } from 'lucide-react';
@@ -38,17 +37,15 @@ interface DocumentStats {
   scenes: number;
 }
 
-// Common Arabic verbs to differentiate from character names
-const commonVerbs: string[] = ['يقف', 'تقف', 'يجلس', 'تجلس', 'يدخل', 'تدخل', 'يخرج', 'تخرج', 'ينظر', 'تنظر', 'يقول', 'تقول', 'يمشي', 'تمشي', 'تركض', 'يركض', 'يكتب', 'تكتب', 'يقرأ', 'تقرأ'];
+
 
 const ScreenplayEditor: React.FC = () => {
   // State management
-  const [text, setText] = useState<string>('');
+
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [currentFormat, setCurrentFormat] = useState<ScreenplayFormatId>('action');
-  const [cursorPosition, setCursorPosition] = useState<number>(0);
-  const [verticalCursorPosition, setVerticalCursorPosition] = useState<number>(0);
+
   const [selectedFont, setSelectedFont] = useState<string>('Amiri');
   const [selectedSize, setSelectedSize] = useState<string>('14pt');
   const [documentStats, setDocumentStats] = useState<DocumentStats>({ characters: 0, words: 0, pages: 1, scenes: 0 });
@@ -59,29 +56,22 @@ const ScreenplayEditor: React.FC = () => {
   const [showFontMenu, setShowFontMenu] = useState<boolean>(false);
   const [showSizeMenu, setShowSizeMenu] = useState<boolean>(false);
   const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
-  const [showLinkDialog, setShowLinkDialog] = useState<boolean>(false);
-  const [linkUrl, setLinkUrl] = useState<string>('');
+
 
   // Menu states
   const [showFileMenu, setShowFileMenu] = useState<boolean>(false);
   const [showEditMenu, setShowEditMenu] = useState<boolean>(false);
   const [showViewMenu, setShowViewMenu] = useState<boolean>(false);
-  const [showFormatMenu, setShowFormatMenu] = useState<boolean>(false);
-  const [showInsertMenu, setShowInsertMenu] = useState<boolean>(false);
   const [showToolsMenu, setShowToolsMenu] = useState<boolean>(false);
-  const [showProductionMenu, setShowProductionMenu] = useState<boolean>(false);
 
   // Dialog states
   const [showSearchDialog, setShowSearchDialog] = useState<boolean>(false);
   const [showReplaceDialog, setShowReplaceDialog] = useState<boolean>(false);
   const [showCharacterRename, setShowCharacterRename] = useState<boolean>(false);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [replaceTerm, setReplaceTerm] = useState<string>('');
-  const [oldCharacterName, setOldCharacterName] = useState<string>('');
-  const [newCharacterName, setNewCharacterName] = useState<string>('');
+
 
   // View settings
-  const [viewMode, setViewMode] = useState<string>('normal');
+
   const [showRulers, setShowRulers] = useState<boolean>(true);
 
   // Refs for DOM elements
@@ -138,10 +128,8 @@ const ScreenplayEditor: React.FC = () => {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const editorRect = scrollContainerRef.current.getBoundingClientRect();
-      const horizontalPos = rect.left - editorRect.left;
-      setCursorPosition(horizontalPos);
-      const verticalPos = rect.top - editorRect.top + scrollContainerRef.current.scrollTop;
-      setVerticalCursorPosition(verticalPos);
+      rect.left - editorRect.left;
+      rect.top - editorRect.top + scrollContainerRef.current.scrollTop;
     }
   };
 
@@ -152,10 +140,14 @@ const ScreenplayEditor: React.FC = () => {
     const range = selection.getRangeAt(0);
     let currentElement = range.commonAncestorContainer;
     while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
-      currentElement = currentElement.parentNode;
+      const parent = currentElement.parentNode;
+      if (!parent) break;
+      currentElement = parent;
     }
     while (currentElement && (currentElement as HTMLElement).tagName !== 'DIV' && currentElement !== editorRef.current) {
-      currentElement = currentElement.parentNode;
+      const parent = currentElement.parentNode;
+      if (!parent) break;
+      currentElement = parent;
     }
     if (!currentElement || currentElement === editorRef.current) return true;
     return (currentElement.textContent || '').trim().length === 0;
@@ -170,7 +162,7 @@ const ScreenplayEditor: React.FC = () => {
       lineHeight: '1.8',
       minHeight: '1.2em'
     };
-    const formatStyles: { [key in ScreenplayFormatId]: React.CSSProperties } = {
+    const formatStyles: Partial<{ [key in ScreenplayFormatId]: React.CSSProperties }> = {
       'basmala': { textAlign: 'left', margin: '12px 0 24px 0', fontWeight: 'bold', fontSize: '16pt' },
       'scene-header-1': { textTransform: 'uppercase', fontWeight: 'bold', margin: '12px 0 12px 0', display: 'flex', justifyContent: 'space-between' },
       'scene-header-2': { textAlign: 'left', fontStyle: 'italic', margin: '12px 0' },
@@ -241,8 +233,16 @@ const ScreenplayEditor: React.FC = () => {
     if (!selection || !selection.rangeCount) return;
     const range = selection.getRangeAt(0);
     let currentElement = range.commonAncestorContainer;
-    while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) currentElement = currentElement.parentNode;
-    while (currentElement && (currentElement as HTMLElement).tagName !== 'DIV' && currentElement !== editorRef.current) currentElement = currentElement.parentNode;
+    while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+      const parent = currentElement.parentNode;
+      if (!parent) break;
+      currentElement = parent;
+    }
+    while (currentElement && (currentElement as HTMLElement).tagName !== 'DIV' && currentElement !== editorRef.current) {
+      const parent = currentElement.parentNode;
+      if (!parent) break;
+      currentElement = parent;
+    }
     if (!currentElement || currentElement === editorRef.current) {
       const newDiv = document.createElement('div');
       newDiv.innerHTML = '<br>';
@@ -264,7 +264,7 @@ const ScreenplayEditor: React.FC = () => {
   const formatText = (command: string, value: string | null = null) => {
     if (!editorRef.current) return;
     editorRef.current.focus();
-    document.execCommand(command, false, value);
+    document.execCommand(command, false, value || '');
     editorRef.current.focus();
     updateContent();
   };
@@ -278,9 +278,15 @@ const ScreenplayEditor: React.FC = () => {
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         let element = range.commonAncestorContainer;
-        if (element.nodeType === Node.TEXT_NODE) element = element.parentNode as HTMLElement;
+        if (element.nodeType === Node.TEXT_NODE) {
+          const parent = element.parentNode;
+          if (!parent) return;
+          element = parent;
+        }
         while (element && (element as HTMLElement).tagName !== 'DIV' && element !== editorRef.current) {
-          element = element.parentNode as HTMLElement;
+          const parent = element.parentNode;
+          if (!parent) break;
+          element = parent;
         }
         if (element && (element as HTMLElement).className && element !== editorRef.current) {
           const formatClasses: ScreenplayFormatId[] = ['basmala', 'scene-header-1', 'scene-header-2', 'scene-header-3', 'action', 'character', 'parenthetical', 'dialogue', 'transition'];
@@ -293,8 +299,7 @@ const ScreenplayEditor: React.FC = () => {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = html;
       tempDiv.innerHTML = tempDiv.innerHTML.replace(/<br\s*\/?>/gi, '\n');
-      const plainText = tempDiv.textContent || '';
-      setText(plainText);
+      tempDiv.textContent || '';
     }
   };
 
@@ -319,10 +324,17 @@ const ScreenplayEditor: React.FC = () => {
         range.deleteContents();
         let currentLine = range.startContainer;
         while (currentLine && (currentLine as HTMLElement).tagName !== 'DIV' && currentLine !== editorRef.current) {
-          currentLine = currentLine.parentNode as Node;
+          const parent = currentLine.parentNode;
+          if (!parent) break;
+          currentLine = parent;
         }
-        if (currentLine && currentLine.parentNode === editorRef.current) {
-          currentLine.parentNode.insertBefore(newDiv, currentLine.nextSibling);
+        if (currentLine) {
+          const parentNode = currentLine.parentNode;
+          if (parentNode && parentNode === editorRef.current) {
+            parentNode.insertBefore(newDiv, currentLine.nextSibling);
+          } else {
+            range.insertNode(newDiv);
+          }
         } else {
           range.insertNode(newDiv);
         }
@@ -360,7 +372,7 @@ const ScreenplayEditor: React.FC = () => {
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const textData = e.clipboardData.getData('text/plain');
+    const textData = e.clipboardData.getData('text/plain') || '';
     if (!textData) return;
 
     const selection = window.getSelection();
@@ -369,29 +381,31 @@ const ScreenplayEditor: React.FC = () => {
     const lines = textData.split('\n').filter(line => line.trim());
     let formattedHTML = '';
     let previousFormatClass: ScreenplayFormatId = 'action';
-    const classifier = classifierRef.current;
+
 
     for (const line of lines) {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      let result = classifier.classifyLine(trimmedLine, previousFormatClass);
-      let formatClass: ScreenplayFormatId;
+      let result = classifierRef.current.classifyLine(line, previousFormatClass);
+      // Remove the check for scene-header-1-split since it's no longer part of the new classifier
+      // if (result === 'scene-header-1-split') {
+      //   const splitResult = classifier.splitSceneHeader(trimmedLine);
+      //   if (splitResult) {
+      //     formatClass = 'scene-header-1';
+      //     cleanLine = `<span>${splitResult.sceneNumber}</span><span>${splitResult.sceneInfo}</span>`;
+      //     isHtml = true;
+      //   } else {
+      //     result = 'scene-header-1';
+      //   }
+      // } else {
+      //   formatClass = result;
+      // }
+      
+      // Fix: Declare the missing variables
+      let formatClass = result;
       let cleanLine = trimmedLine;
       let isHtml = false;
-
-      if (result === 'scene-header-1-split') {
-          const splitResult = classifier.splitSceneHeader(trimmedLine);
-          if (splitResult) {
-              formatClass = 'scene-header-1';
-              cleanLine = `<span>${splitResult.sceneNumber}</span><span>${splitResult.sceneInfo}</span>`;
-              isHtml = true;
-          } else {
-              formatClass = 'scene-header-1';
-          }
-      } else {
-          formatClass = result;
-      }
 
       if (formatClass === 'character' && !trimmedLine.endsWith(':') && !trimmedLine.endsWith('：')) {
         cleanLine = trimmedLine + ' :';
@@ -474,8 +488,8 @@ const ScreenplayEditor: React.FC = () => {
 
   const closeAllMenus = () => {
     setShowFileMenu(false); setShowEditMenu(false); setShowViewMenu(false);
-    setShowFormatMenu(false); setShowInsertMenu(false); setShowToolsMenu(false);
-    setShowProductionMenu(false); setShowFontMenu(false); setShowSizeMenu(false); setShowColorPicker(false);
+    setShowToolsMenu(false);
+    setShowFontMenu(false); setShowSizeMenu(false); setShowColorPicker(false);
   };
 
   useEffect(() => {

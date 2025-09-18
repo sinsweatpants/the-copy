@@ -1,9 +1,25 @@
 import { ScreenplayFormat, NEXT_FORMAT_ON_ENTER, NEEDS_EMPTY_LINE, SPACING_MAP } from './constants';
 
+export type { ScreenplayFormat };
+
 export const classifyLineInstantly = (text: string, previousFormat: ScreenplayFormat): ScreenplayFormat => {
   if (!text || text.length < 2) return 'action';
   const trimmed = text.trim();
-  if (/^[^\s:]{1,15}:/.test(trimmed)) return 'character';
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  
+  // قواعد محدثة للتصنيف
+  const commonVerbs = ['يقف', 'تقف', 'يجلس', 'تجلس', 'يدخل', 'تدخل', 'يخرج', 'تخرج', 'ينظر', 'تنظر', 'يقول', 'تقول', 'يمشي', 'تمشي', 'تركض', 'يركض', 'يكتب', 'تكتب', 'يقرأ', 'تقرأ', 'يقوم', 'تبتسم', 'يبتسم', 'تقوم'];
+  
+  // فحص النصوص التي تنتهي بنقطتين
+  if (/^[^\s:]{1,15}:/.test(trimmed) || trimmed.endsWith(':')) {
+    // إذا كان قصير ولا يحتوي على أفعال = اسم شخصية
+    if (wordCount <= 3 && !commonVerbs.some(verb => trimmed.includes(verb))) {
+      return 'character';
+    }
+    // إذا كان طويل أو يحتوي على أفعال = action
+    return 'action';
+  }
+  
   if (/^(مشهد|scene|الفصل|chapter)/i.test(trimmed)) return 'scene-header-1';
   if (/^(داخلي|خارجي|ليل|نهار|صباح|مساء|interior|exterior)/i.test(trimmed)) return 'scene-header-2';
   if (/^(البيت|المدرسة|المكتب|الشارع|المستشفى|الغرفة)/i.test(trimmed)) return 'scene-header-3';

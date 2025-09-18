@@ -7,7 +7,7 @@ import TextAnalysisPage from './components/pages/TextAnalysisPage';
 import './styles/tailwind.css';
 import './styles/animations.css';
 
-type CurrentPage = 'home' | 'editor' | 'analyzer' | 'ai-agents' | 'text-analysis';
+type CurrentPage = 'home' | 'editor' | 'analyzer' | 'ai-agents' | 'text-analysis' | 'firebase-test';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<CurrentPage>('home');
@@ -35,15 +35,37 @@ function App() {
             <div className="container mx-auto px-4 py-16 relative z-10">
               <div className="text-center mb-16">
                 <div className="mb-8">
-                  <h1 className="text-7xl font-bold mb-6 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent animate-pulse">
-                    the-copy
-                  </h1>
-                  <div className="w-32 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto rounded-full mb-8"></div>
+                  <div className="flex flex-col items-center justify-center" dir="rtl">
+                    <div className="flex items-center justify-center space-x-10 mb-6" dir="rtl">
+                      <div className="flex flex-col items-center">
+                        <h1 
+                          className="text-8xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent animate-pulse"
+                          dir="rtl"
+                        >
+                          النسخة -
+                        </h1>
+                        <p className="text-xl text-gray-300 font-medium mt-4 text-center">
+                          بس اصلي
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <h1 
+                          className="text-8xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent animate-pulse"
+                          dir="ltr"
+                        >
+                          the copy
+                        </h1>
+                        <p className="text-xl text-gray-300 font-medium mt-4 text-center">
+                          Because Originals Know What to Copy.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-32 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto rounded-full mt-10"></div>
                 </div>
                 <p className="text-2xl text-gray-300 mb-8 font-light leading-relaxed max-w-4xl mx-auto">
-                  بيئة تطوير متكاملة لكتابة وتحليل السيناريوهات العربية
                   <br />
-                  <span className="text-lg text-purple-300">مدعومة بالذكاء الاصطناعي والتقنيات المتقدمة</span>
+                  <span className="text-lg text-purple-300"></span>
                 </p>
               </div>
               

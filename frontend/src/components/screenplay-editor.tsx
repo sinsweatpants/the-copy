@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, Fragment } from 'react';
 import {
   Sparkles, Check, X, Loader2, Sun, Moon, Copy, FileText,
   Bold, Italic, Underline, Link, AlignLeft, AlignCenter,
-  AlignRight, List, ListOrdered, IndentDecrease, IndentIncrease,
+  AlignRight, List, ListOrdered,
   Palette, MoveVertical, Type, Highlighter, MoreHorizontal,
   Search, Replace, Save, FolderOpen, Printer, Eye, Settings,
   Play, Pause, RotateCcw, RotateCw, Download, Upload, Share2,
@@ -48,7 +48,7 @@ class ScreenplayClassifier {
     sceneLocationKeywords: string[] = ['داخلي', 'خارجي', 'فوتو', 'مونتاج', 'int.', 'ext.'];
     sceneKeywords: string[] = [...this.sceneTimeKeywords, ...this.sceneLocationKeywords];
     transitionKeywords: string[] = ['قطع', 'اختفاء', 'تحول', 'انتقال', 'cut to', 'fade to', 'dissolve to'];
-    commonVerbs: string[] = ['يقف', 'تقف', 'يجلس', 'تجلس', 'يدخل', 'تدخل', 'يخرج', 'تخرج', 'ينظر', 'تنظر', 'يقول', 'تقول', 'يمشي', 'تمشي', 'تركض', 'يركض', 'يكتب', 'تكتب', 'يقرأ', 'تقرأ'];
+    commonVerbs: string[] = ['يقف', 'تقف', 'يجلس', 'تجلس', 'يدخل', 'تدخل', 'يخرج', 'تخرج', 'ينظر', 'تنظر', 'يقول', 'تقول', 'يمشي', 'تمشي', 'تركض', 'يركض', 'يكتب', 'تكتب', 'يقرأ', 'تقرأ', 'يقوم', 'تبتسم', 'يبتسم', 'تقوم'];
     locationNames: string[] = ['مسجد', 'جامع', 'كنيسة', 'مدرسة', 'مستشفى', 'شارع', 'ميدان', 'حديقة', 'مقهى', 'مطعم', 'محل', 'بيت', 'منزل', 'فيلا', 'عمارة', 'برج', 'القاهرة', 'الإسكندرية', 'الجيزة', 'المنصورة', 'أسوان', 'الأقصر', 'طنطا', 'المنيا'];
 
     classifyLine(line: string, previousFormat: ScreenplayFormatId): ScreenplayFormatId | 'scene-header-1-split' {
@@ -87,7 +87,12 @@ class ScreenplayClassifier {
             return 'action';
         }
         if (trimmedLine.endsWith(':') || trimmedLine.endsWith('：')) {
-            return 'character';
+            // تحقق من أن النص قصير ولا يحتوي على أفعال لتحديد أنه اسم شخصية
+            if (wordCount <= 3 && !this.commonVerbs.some(verb => trimmedLine.includes(verb))) {
+                return 'character';
+            }
+            // إذا كان النص طويل أو يحتوي على أفعال فهو action
+            return 'action';
         }
         if (trimmedLine.match(/^[A-Z\s]+$/) && wordCount <= 4) {
             return 'character';
@@ -286,7 +291,7 @@ const ScreenplayEditor: React.FC = () => {
           formatClass = 'scene-header-1';
         }
       }
-      else if (trimmedLine.match(/^مشهد\s*\d+\s+(ليل|نهار|صباح|مساء|فجر|ظهر|عصر|مغرب|عشاء)?\s*-?\s*(داخلي|خارجي|فوتو|مونتاج)?/i)) {
+      else if (trimmedLine.match(/^مشهد\s*\d+\s+(ليل|نهار|صباح|مساء|فجر|ظهر|عصر|غرب|عشاء)?\s*-?\s*(داخلي|خارجي|فوتو|مونتاج)?/i)) {
         const match = trimmedLine.match(/^(مشهد\s*\d+)\s+(.+)$/i);
         if (match) {
           formatClass = 'scene-header-1';

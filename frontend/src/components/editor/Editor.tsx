@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, Fragment } from 'react';
 import {
   Sparkles, Check, X, Loader2, Sun, Moon, Copy, FileText,
   Bold, Italic, Underline, Link, AlignLeft, AlignCenter,
-  AlignRight, List, ListOrdered, IndentDecrease, IndentIncrease,
+  AlignRight, List, ListOrdered,
   Palette, MoveVertical, Type, Highlighter, MoreHorizontal,
   Search, Replace, Save, FolderOpen, Printer, Eye, Settings,
   Play, Pause, RotateCcw, RotateCw, Download, Upload, Share2,
@@ -94,7 +94,6 @@ const ScreenplayEditor: React.FC = () => {
   const A4_PAGE_HEIGHT_PX = 1123;
 
   const screenplayFormats: ScreenplayFormat[] = [
-    { id: 'basmala', label: 'بسملة', shortcut: '', color: 'bg-purple-100', icon: <BookHeart size={18} /> },
     { id: 'scene-header-1', label: 'عنوان المشهد (1)', shortcut: 'Ctrl+1', color: 'bg-blue-100', icon: <Film size={18} /> },
     { id: 'scene-header-2', label: 'عنوان المشهد (2)', shortcut: 'Tab', color: 'bg-blue-50', icon: <MapPin size={18} /> },
     { id: 'scene-header-3', label: 'عنوان المشهد (3)', shortcut: 'Tab', color: 'bg-blue-25', icon: <Camera size={18} /> },
@@ -150,7 +149,7 @@ const ScreenplayEditor: React.FC = () => {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return true;
     const range = selection.getRangeAt(0);
-    let currentElement = range.commonAncestorContainer;
+    let currentElement: Node | null = range.commonAncestorContainer;
     while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
       currentElement = currentElement.parentNode;
     }
@@ -170,8 +169,7 @@ const ScreenplayEditor: React.FC = () => {
       lineHeight: '1.8',
       minHeight: '1.2em'
     };
-    const formatStyles: { [key in ScreenplayFormatId]: React.CSSProperties } = {
-      'basmala': { textAlign: 'left', margin: '12px 0 24px 0', fontWeight: 'bold', fontSize: '16pt' },
+    const formatStyles: { [key in ScreenplayFormatId]?: React.CSSProperties } = {
       'scene-header-1': { textTransform: 'uppercase', fontWeight: 'bold', margin: '12px 0 12px 0', display: 'flex', justifyContent: 'space-between' },
       'scene-header-2': { textAlign: 'left', fontStyle: 'italic', margin: '12px 0' },
       'scene-header-3': { textAlign: 'center', fontWeight: 'bold', margin: '12px 0 12px 0' },
@@ -229,8 +227,7 @@ const ScreenplayEditor: React.FC = () => {
       'character': 'dialogue',
       'parenthetical': 'dialogue',
       'dialogue': 'action',
-      'transition': 'scene-header-1',
-      'basmala': 'scene-header-1'
+      'transition': 'scene-header-1'
     };
     return transitions[current] || 'action';
   };
@@ -240,7 +237,7 @@ const ScreenplayEditor: React.FC = () => {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
     const range = selection.getRangeAt(0);
-    let currentElement = range.commonAncestorContainer;
+    let currentElement: Node | null = range.commonAncestorContainer;
     while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) currentElement = currentElement.parentNode;
     while (currentElement && (currentElement as HTMLElement).tagName !== 'DIV' && currentElement !== editorRef.current) currentElement = currentElement.parentNode;
     if (!currentElement || currentElement === editorRef.current) {
@@ -264,7 +261,7 @@ const ScreenplayEditor: React.FC = () => {
   const formatText = (command: string, value: string | null = null) => {
     if (!editorRef.current) return;
     editorRef.current.focus();
-    document.execCommand(command, false, value);
+    document.execCommand(command, false, value ?? undefined);
     editorRef.current.focus();
     updateContent();
   };
@@ -283,7 +280,7 @@ const ScreenplayEditor: React.FC = () => {
           element = element.parentNode as HTMLElement;
         }
         if (element && (element as HTMLElement).className && element !== editorRef.current) {
-          const formatClasses: ScreenplayFormatId[] = ['basmala', 'scene-header-1', 'scene-header-2', 'scene-header-3', 'action', 'character', 'parenthetical', 'dialogue', 'transition'];
+          const formatClasses: ScreenplayFormatId[] = ['scene-header-1', 'scene-header-2', 'scene-header-3', 'action', 'character', 'parenthetical', 'dialogue', 'transition'];
           const foundFormat = formatClasses.find(cls => (element as HTMLElement).className.includes(cls));
           if (foundFormat) setCurrentFormat(foundFormat);
         } else {
@@ -317,11 +314,11 @@ const ScreenplayEditor: React.FC = () => {
         Object.assign(newDiv.style, getFormatStyles(nextFormat));
         newDiv.innerHTML = '<br>';
         range.deleteContents();
-        let currentLine = range.startContainer;
+        let currentLine: Node | null = range.startContainer;
         while (currentLine && (currentLine as HTMLElement).tagName !== 'DIV' && currentLine !== editorRef.current) {
-          currentLine = currentLine.parentNode as Node;
+          currentLine = currentLine.parentNode as Node | null;
         }
-        if (currentLine && currentLine.parentNode === editorRef.current) {
+        if (currentLine && currentLine.parentNode && currentLine.parentNode === editorRef.current) {
           currentLine.parentNode.insertBefore(newDiv, currentLine.nextSibling);
         } else {
           range.insertNode(newDiv);
@@ -375,22 +372,14 @@ const ScreenplayEditor: React.FC = () => {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      let result = classifier.classifyLine(trimmedLine, previousFormatClass);
-      let formatClass: ScreenplayFormatId;
+      let result = classifierRef.current.classifyLine(line, currentFormat);
+      let formatClass: ScreenplayFormatId = 'action';
       let cleanLine = trimmedLine;
       let isHtml = false;
 
-      if (result === 'scene-header-1-split') {
-          const splitResult = classifier.splitSceneHeader(trimmedLine);
-          if (splitResult) {
-              formatClass = 'scene-header-1';
-              cleanLine = `<span>${splitResult.sceneNumber}</span><span>${splitResult.sceneInfo}</span>`;
-              isHtml = true;
-          } else {
-              formatClass = 'scene-header-1';
-          }
-      } else {
-          formatClass = result;
+      // Handle the result properly
+      if (typeof result === 'string') {
+        formatClass = result as ScreenplayFormatId;
       }
 
       if (formatClass === 'character' && !trimmedLine.endsWith(':') && !trimmedLine.endsWith('：')) {
