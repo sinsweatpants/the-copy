@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import firebaseService from '../services/firebaseService';
+import firebaseService from '../../services/firebaseService';
 
 const FirebaseDemo: React.FC = () => {
   const [user, setUser] = useState<any>(null);

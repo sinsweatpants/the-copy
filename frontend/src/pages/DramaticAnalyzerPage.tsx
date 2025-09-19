@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { FileUpload } from '../analyzer/FileUpload';
-import { AnalysisSelector } from '../analyzer/AnalysisSelector';
-import { ExpertChat } from '../analyzer/ExpertChat2';
-import { SwarmDialogue } from '../analyzer/SwarmDialogue';
-import { ResultsDisplay } from '../analyzer/ResultsDisplay';
+import { FileUpload } from '@/components/analyzer/FileUpload';
+import { AnalysisSelector } from '@/components/analyzer/AnalysisSelector';
+import { ExpertChat } from '@/components/analyzer/ExpertChat2';
+import { SwarmDialogue } from '@/components/analyzer/SwarmDialogue';
+import { ResultsDisplay } from '@/components/analyzer/ResultsDisplay';
 import { Sparkles, MessageCircle, Users, Upload, Download, Code, Palette, Bug, Zap, Search, Settings, FileText, ChevronDown, ChevronUp, BarChart3, TrendingUp } from 'lucide-react';
 
 type AnalysisMode = 'individual' | 'chat' | 'swarm';

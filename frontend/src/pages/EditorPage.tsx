@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import ScreenplayEditor from '../screenplay-editor';
+import ScreenplayEditor from '@/components/editor/Editor';
 import { Upload, Download, Code, Palette, Bug, Zap, Search, Settings, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 
 const EditorPage: React.FC = () => {
