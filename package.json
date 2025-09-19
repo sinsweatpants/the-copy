@@ -19,7 +19,7 @@
     "test:frontend": "npm test --workspace=frontend"
   },
   "dependencies": {
-    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@dataconnect/generated": "file:dataconnect-generated",
     "@tanstack/react-query": "^5.84.1",
     "@tanstack/react-query-devtools": "^5.84.1",
     "@tiptap/extension-bold": "^3.0.9",

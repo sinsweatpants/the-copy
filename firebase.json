@@ -1,13 +1,6 @@
 {
-  "emulators": {
-    "dataconnect": {
-      "dataDir": "dataconnect/.dataconnect/pgliteData"
-    }
-  },
-  "dataconnect": {
-    "source": "dataconnect"
-  },
   "hosting": {
+    "site": "adam-468522-82855",
     "public": "frontend/dist",
     "ignore": [
       "firebase.json",
@@ -19,6 +12,17 @@
         "source": "**",
         "destination": "/index.html"
       }
+    ]
+  },
+  "apphosting": {
+    "backendId": "the-copy",
+    "rootDir": "/",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "functions"
     ]
   }
 }

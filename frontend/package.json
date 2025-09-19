@@ -12,7 +12,7 @@
     "lint": "echo 'frontend lint'"
   },
   "dependencies": {
-    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@dataconnect/generated": "file:../dataconnect-generated",
     "@tanstack/react-query": "^5.51.21",
     "bcrypt": "^6.0.0",
     "dompurify": "^3.1.6",
