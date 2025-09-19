@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScreenplayClassifier, type ScreenplayFormatId } from '../services/ScreenplayClassifier';
+import { ScreenplayClassifier, type ScreenplayFormatId } from '../../services/ScreenplayClassifier';
 
 interface RealRichEditorProps {
     screenplay: any;

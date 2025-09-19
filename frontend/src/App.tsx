@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import EditorPage from './components/pages/EditorPage';
-import DramaticAnalyzerPage from './components/pages/DramaticAnalyzerPage';
-import Navigation from './components/Navigation';
-import AiAgentsPage from './components/pages/AiAgentsPage';
-import TextAnalysisPage from './components/pages/TextAnalysisPage';
+import EditorPage from './pages/EditorPage';
+import DramaticAnalyzerPage from './pages/DramaticAnalyzerPage';
+import Navigation from './components/layout/Navigation';
+import AiAgentsPage from './pages/AiAgentsPage';
+import TextAnalysisPage from './pages/TextAnalysisPage';
 import './styles/tailwind.css';
 import './styles/animations.css';
 

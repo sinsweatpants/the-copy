@@ -1,7 +1,7 @@
 // PasteHandler.tsx - Version 2.0 (Three-Component Scene Header)
 import React, { useCallback } from 'react';
 import DOMPurify from 'dompurify';
-import { ScreenplayFormatId, IClassifier } from '../types/screenplay';
+import { ScreenplayFormatId, IClassifier } from '../../types/screenplay';
 
 /* ──────────────────────────────
    Props للمكوّن

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { app, analytics } from '../lib/firebase';
+import { app, analytics } from '../../lib/firebase';
 import FirebaseDemo from './FirebaseDemo';
 
 const FirebaseTest: React.FC = () => {
